@@ -172,6 +172,9 @@ def doglm(bigdf, sampconds):
     outdf.to_csv('glm.txt', sep = '\t', header = True, index = False, na_rep = 'NA')      
 
 
+#Usage: glm.py <comma separated list of slamdunk outputs> <comma separated list of sample names in the same order> <comma separated list of conditions in the same order>
+#e.g. glm.py output1.txt,output2.txt,output3.txt,output4.txt S1R1,S1R2,S2R1,S2R2, S1,S1,S2,S2
+
 bigdf = combinesamples(sys.argv[1], sys.argv[2])
 sampconds = classifysamples(sys.argv[2], sys.argv[3])
 doglm(bigdf, sampconds)
