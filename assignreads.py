@@ -44,7 +44,7 @@ def getReadOverlaps(bam, bed, chrsort):
             overlaps[readid][txid] = overlaplength
         elif txid in overlaps[readid]:
             overlaps[readid][txid] += overlaplength
-    
+
     return overlaps, numpairs
 
 def processOverlaps(overlaps, numpairs):
@@ -58,7 +58,7 @@ def processOverlaps(overlaps, numpairs):
         read2gene[read] = gene
 
     frac_readpairs_with_gene = round((len(read2gene) / numpairs) * 100, 2)
-    print('Found genes for {0} readpairs ({1}%).'.format(len(read2gene), frac_readpairs_with_gene))
+    print('Found genes for {0} read pairs ({1}%).'.format(len(read2gene), frac_readpairs_with_gene))
 
     return read2gene
 

@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from snps import getSNPs, recordSNPs
 import pickle
+import multiprocessing as mp
+import subprocess
 
 
 def revcomp(nt):
@@ -23,7 +25,6 @@ def revcomp(nt):
         'n' : 'n'
     }
 
-    nt = nt.upper()
     nt_rc = revcompdict[nt]
 
     return nt_rc
@@ -93,11 +94,6 @@ def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, chrom
     #everything here is assuming read is on sense strand
 
     #snplocations is a set of chrm_coord locations. At these locations, all queries will be treated as not having a conversion
-    
-    #TODO:
-    #add quality filter for conversions
-    #if conversion is above quality filter, it stays
-    #otherwise, it is reverted to reference
 
     alignedpairs = [x for x in alignedpairs if None not in x]
 
@@ -179,7 +175,7 @@ def findsnps(controlbams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
 
     return snps
 
-def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipleConv = False):
+def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipleConv = False, verbosity = 'high'):
     #Iterate over reads in a paired end alignment file.
     #Find nt conversion locations for each read.
     #For locations interrogated by both mates of read pair, conversion must exist in both mates in order to count
@@ -196,8 +192,10 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipl
     queriednts = []
     readcounter = 0
     convs = {} #{readid : dictionary of all conversions}
+    save = pysam.set_verbosity(0)
     with pysam.AlignmentFile(bam, 'r') as infh:
-        print('Finding nucleotide conversions in {0}...'.format(os.path.basename(bam)))
+        if verbosity == 'high':
+            print('Finding nucleotide conversions in {0}...'.format(os.path.basename(bam)))
         for read1, read2 in read_pair_generator(infh):
             
             #Just double check that the pairs are matched
@@ -211,7 +209,8 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipl
 
             readcounter +=1
             if readcounter % 1000000 == 0:
-                print('Finding nucleotide conversions in read {0}...'.format(readcounter))
+                if verbosity == 'high':
+                    print('Finding nucleotide conversions in read {0}...'.format(readcounter))
                 
             queryname = read1.query_name
             chrm = read1.reference_name
@@ -246,11 +245,12 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipl
             queriednts.append(sum(convs_in_read.values()))
             convs[queryname] = convs_in_read
 
-    print(np.median(queriednts), np.std(queriednts))
-    print('Queried {0} read pairs in {1}.'.format(readcounter, os.path.basename(bam)))
+    if verbosity == 'high':
+        print('Queried {0} read pairs in {1}.'.format(readcounter, os.path.basename(bam)))
 
+    pysam.set_verbosity(save)
     #Pickle and write convs?
-    return convs
+    return convs, readcounter
 
 
 def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyoverlap, requireMultipleConv):
@@ -502,6 +502,56 @@ def summarize_convs(convs, outfile):
             str(totalnt), str(totalconv), str(totalerrorrate)
         ]))
         
+def split_bam(bam):
+    #Split a bam file into multiple files by chromosome
+    #Used if using multiprocessing
+    splitCMD = 'bamtools split -in ' + bam + ' -reference'
+    splitcall = subprocess.Popen(splitCMD, shell = True)
+    splitcall.wait()
+
+    files = os.listdir(os.path.dirname(bam)) #this is basenames
+    #add path stem
+    files = [os.path.join(os.path.dirname(bam), f) for f in files]
+    #filter for split bams
+    splitbams = [f for f in files if 'REF_' in os.path.basename(f)]
+
+    return splitbams
+
+
+def getmismatches(bam, onlyConsiderOverlap, snps, requireMultipleConv, nproc):
+    #Actually run the mismatch code (calling iteratereads_pairedend)
+    #use multiprocessing
+    #If there's only one processor, easier to use iteratereads_pairedend() directly.
+
+    pool = mp.Pool(processes = int(nproc))
+    print('Using {0} processors to identify mismatches in {1}.'.format(nproc, bam))
+    splitbams = split_bam(bam)
+    argslist = []
+    for x in splitbams:
+        argslist.append((x, bool(onlyConsiderOverlap), snps, bool(requireMultipleConv), 'low'))
+
+    #items returned from iteratereads_pairedend are in a list, one per process
+    totalreadcounter = 0 #number of reads across all the split bams
+    results = pool.starmap(iteratereads_pairedend, argslist) #thhis actually returns two things, convs and readcounter
+    #so i bet this is a nested list where the first item in each list in a convs and the second item is a readcounter
+    convs_split = []
+    for result in results:
+        convs_split.append(result[0])
+    for result in results:
+        totalreadcounter += result[1]
+
+    print('Queried {0} read pairs in {1}.'.format(totalreadcounter, os.path.basename(bam)))
+
+    #Reorganize convs_split into convs as it is without multiprocessing
+    convs = {} #{readid : dictionary of all conversions}
+    for splitconv in convs_split:
+        convs.update(splitconv)
+
+    #cleanup
+    for splitbam in splitbams:
+        os.remove(splitbam)
+
+    return convs
 
 
     
@@ -512,6 +562,17 @@ if __name__ == '__main__':
 
     #convs = iteratereads_singleend(sys.argv[1], None)
     convs = iteratereads_pairedend(sys.argv[1], True, snps, False)
-    with open('OINC3.mDBF.subsampled.filtered.convs.pkl', 'wb') as outfh:
-        pickle.dump(convs, outfh)
+    #with open('OINC3.mDBF.subsampled.filtered.convs.pkl', 'wb') as outfh:
+        #pickle.dump(convs, outfh)
     #summarize_convs(convs, sys.argv[2])
+    overlaps, numpairs = getReadOverlaps(sys.argv[1], sys.argv[2], sys.argv[3]) #bam, geneBed, chrom.sizes
+    read2gene = processOverlaps(overlaps, numpairs)
+    with open('read2gene.pkl', 'wb') as outfh:
+        pickle.dump(read2gene, outfh)
+    with open('convs.pkl', 'wb') as outfh:
+        pickle.dump(convs, outfh)
+
+    numreadspergene, convsPerGene = getPerGene(convs, read2gene)
+    writeConvsPerGene(numreadspergene, convsPerGene, sys.argv[4]) #output
+
+    

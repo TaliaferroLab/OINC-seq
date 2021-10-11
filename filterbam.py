@@ -63,6 +63,8 @@ def filterbam(bam):
 
     os.remove('reads.tmp')
 
+    return filteredbamPath
+
 
 if __name__ == '__main__':
     intersectreads(sys.argv[1], sys.argv[2], sys.argv[3])

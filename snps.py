@@ -39,19 +39,28 @@ def getSNPs(bams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
 
             #compress
             bgzipCMD = 'bgzip -f ' + vcffn
-            subprocess.Popen(bgzipCMD, shell = True)
+            compress = subprocess.Popen(bgzipCMD, shell = True)
+            compress.wait()
+
 
             #make index
             indexCMD = 'bcftools index -f ' + vcffn + '.gz'
-            subprocess.Popen(indexCMD, shell = True)
+            icmd = subprocess.Popen(indexCMD, shell = True)
+            icmd.wait()
 
     #if there is more than 1 vcf file, merge them
     if len(vcfFileNames) == 1:
-        os.rename(vcfFileNames[0], 'merged.vcf')
+        with open('vcfconcat.log', 'w') as logfh:
+            vcfFileNames = vcfFileNames * 2
+            vcfFiles = ' '.join(vcfFileNames)
+            print(vcfFiles)
+            concatCMD = 'bcftools merge --force-samples -m snps -O z --output merged.vcf ' + vcfFiles
+            concat = subprocess.Popen(concatCMD, shell = True, stderr = logfh)
+            concat.wait()
+        filetorecord = vcfFileNames[0]
     elif len(vcfFileNames) > 1:
         with open('vcfconcat.log', 'w') as logfh:
             vcfFiles = ' '.join(vcfFileNames)
-            #concatCMD = 'bcftools concat ' + vcfFiles + ' --allow-overlaps -O z --output merged.vcf'
             concatCMD = 'bcftools merge --force-samples -m snps -O z --output merged.vcf ' + vcfFiles
             concat = subprocess.Popen(concatCMD, shell = True, stderr = logfh)
             concat.wait()

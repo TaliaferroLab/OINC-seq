@@ -4,6 +4,7 @@
 import sys
 import pickle
 from collections import Counter
+import numpy as np
 
 
 def getPerGene(convs, reads2gene):
@@ -60,7 +61,7 @@ def writeConvsPerGene(numreadspergene, convsPerGene, outfile):
     with open(outfile, 'w') as outfh:
         #total G is number of ref Gs encountered
         #convG is g_t + g_c (the ones we are interested in)
-        outfh.write(('\t').join(['Gene', 'numreads'] + possibleconvs + ['totalG', 'convG', 'convGrate']) + '/n')
+        outfh.write(('\t').join(['Gene', 'numreads'] + possibleconvs + ['totalG', 'convG', 'convGrate', 'G_Trate', 'G_Crate', 'porc']) + '\n')
         genes = sorted(convsPerGene.keys())
 
         for gene in genes:
@@ -75,11 +76,56 @@ def writeConvsPerGene(numreadspergene, convsPerGene, outfile):
 
             totalG = c['g_g'] + c['g_c'] + c['g_t'] + c['g_a'] + c['g_n']
             convG = c['g_c'] + c['g_t']
+            g_ccount = c['g_c']
+            g_tcount = c['g_t']
+
+            totalmut = c['a_t'] + c['a_c'] + c['a_g'] + c['g_t'] + c['g_c'] + c['g_a'] + c['t_a'] + c['t_c'] + c['t_g'] + c['c_t'] + c['c_g'] + c['c_a']
+            totalnonmut = c['a_a'] + c['g_g'] + c['c_c'] + c['t_t']
+            allnt = totalmut + totalnonmut
+
             try:
                 convGrate = convG / totalG
             except ZeroDivisionError:
                 convGrate = 'NA'
-            outfh.write(('\t').join([gene, str(numreads)] + convcounts + [str(totalG), str(convG), str(convGrate)]) + '\n')
+                
+            try: 
+                g_crate = g_ccount / totalG
+            except ZeroDivisionError:
+                g_crate = 'NA'
+
+            try:
+                g_trate = g_tcount / totalG
+            except ZeroDivisionError:
+                g_trate = 'NA'
+
+            try:
+                totalmutrate = totalmut / allnt
+            except ZeroDivisionError:
+                totalmutrate = 'NA'
+
+            #normalize convGrate to rate of all mutations
+            #Proportion Of Relevant Conversions
+            if totalmutrate == 'NA':
+                porc = 'NA'
+            elif totalmutrate > 0:
+                try:
+                    porc = np.log2(convGrate / totalmutrate)
+                except:
+                    porc = 'NA'
+            else:
+                porc = 'NA'
+
+            #Format numbers for printing
+            if type(convGrate) == float:
+                convGrate = '{:.2e}'.format(convGrate)
+            if type(g_trate) == float:
+                g_trate = '{:.2e}'.format(g_trate)
+            if type(g_crate) == float:
+                g_crate = '{:.2e}'.format(g_crate)
+            if type(porc) == np.float64:
+                porc = '{:.3f}'.format(porc)
+
+            outfh.write(('\t').join([gene, str(numreads)] + convcounts + [str(totalG), str(convG), str(convGrate), str(g_trate), str(g_crate), str(porc)]) + '\n')
 
         
 if __name__ == '__main__':
