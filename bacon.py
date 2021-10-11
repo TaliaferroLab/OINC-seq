@@ -1,3 +1,10 @@
+#Bioinformatic Analysis of the Conversion Of Nucleotides (BACON)
+
+#Identify genes whose PORC values are different across conditions
+#Two possibilities: GLM (readconditions, makePORCdf, getLMEp)
+#or
+#subsample reads, calculate many PORC values, using Hotelling T2 to identify genes with different PORC distributions across conditions 
+
 import pandas as pd
 import sys
 import numpy as np
