@@ -5,7 +5,7 @@ import argparse
 import subprocess
 import os
 from snps import getSNPs, recordSNPs
-from filterbam import intersectreads, filterbam
+from filterbam import intersectreads, filterbam, intersectreads_multiprocess
 from getmismatches import iteratereads_pairedend, getmismatches
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
@@ -55,8 +55,12 @@ if __name__ == '__main__':
     #Filter bam for reads contained within entries in geneBed
     #This will reduce the amount of time it takes to find conversions
     print('Filtering bam for reads contained within regions of interest...')
-    intersectreads(args.bam, args.geneBed, args.chromsizes)
-    filteredbam = filterbam(args.bam)
+    if args.nproc == 1:
+        intersectreads(args.bam, args.geneBed, args.chromsizes)
+        filteredbam = filterbam(args.bam, args.nproc)
+    elif args.nproc > 1:
+        intersectreads_multiprocess(args.bam, args.geneBed, args.chromsizes, args.nproc)
+        filteredbam = filterbam(args.bam, args.nproc)
 
     #Identify conversions
     if args.nproc == 1:

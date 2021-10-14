@@ -501,19 +501,35 @@ def summarize_convs(convs, outfile):
             str(t_a / t), str(t_c / t), str(t_g / t), str(t_n / t),
             str(totalnt), str(totalconv), str(totalerrorrate)
         ]))
-        
-def split_bam(bam):
-    #Split a bam file into multiple files by chromosome
-    #Used if using multiprocessing
-    splitCMD = 'bamtools split -in ' + bam + ' -reference'
-    splitcall = subprocess.Popen(splitCMD, shell = True)
-    splitcall.wait()
 
-    files = os.listdir(os.path.dirname(bam)) #this is basenames
-    #add path stem
-    files = [os.path.join(os.path.dirname(bam), f) for f in files]
-    #filter for split bams
-    splitbams = [f for f in files if 'REF_' in os.path.basename(f)]
+def split_bam(bam, nproc):
+    #Split bam using samtools instead of bamtools (may be faster)
+    #Check for index
+    if os.path.exists(os.path.abspath(bam) + '.bai'):
+        pass
+    else:
+        indexCMD = 'samtools index ' + os.path.abspath(bam)
+        index = subprocess.Popen(indexCMD, shell = True)
+        index.wait()
+
+    #Get chromosome names
+    idxstatsCMD = 'samtools idxstats ' + os.path.abspath(bam)
+    idxstats = subprocess.Popen(idxstatsCMD, shell = True, stdout = subprocess.PIPE)
+    chrms = []
+    for line in idxstats.stdout:
+        line = line.decode('UTF-8').strip().split('\t')
+        chrm = line[0]
+        if chrm != '*':
+            chrms.append(chrm)
+
+    splitbams = []
+    for chrm in chrms:
+        filebasename = chrm + '_SPLIT.bam'
+        filepath = os.path.join(os.path.dirname(os.path.abspath(bam)), filebasename)
+        splitbams.append(filepath)
+        splitCMD = 'samtools view -@ ' + str(nproc) + ' -b ' + os.path.abspath(bam) + ' ' + chrm + ' > ' + filepath
+        s = subprocess.Popen(splitCMD, shell = True)
+        s.wait()
 
     return splitbams
 
@@ -525,7 +541,7 @@ def getmismatches(bam, onlyConsiderOverlap, snps, requireMultipleConv, nproc):
 
     pool = mp.Pool(processes = int(nproc))
     print('Using {0} processors to identify mismatches in {1}.'.format(nproc, bam))
-    splitbams = split_bam(bam)
+    splitbams = split_bam(bam, int(nproc))
     argslist = []
     for x in splitbams:
         argslist.append((x, bool(onlyConsiderOverlap), snps, bool(requireMultipleConv), 'low'))
