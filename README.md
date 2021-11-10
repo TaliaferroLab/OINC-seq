@@ -4,27 +4,28 @@
 
 OINC-seq (Oxidation-Induced Nucleotide Conversion sequencing) is a sequencing technology that allows the direction of oxidative marks on RNA molecules. Because guanosine has the lowest redox potential of any of the ribonucleosides, it is the one most likely to be affected by oxidation. When this occurs, guanosine is turned into 8-oxoguanosine (8-OG). A previous [study](https://pubs.acs.org/doi/10.1021/acs.biochem.7b00730) found that when reverse transcriptase encounters guanosine oxidation products, it can misinterpret 8-OG as either T or C. Therefore, to detect these oxidative marks, one can look for G -> T and G -> C conversions in RNAseq data.
 
-To detect and quantify these conversions, we have created software called **PIGPEN** (Pipeline for Identification of Guanosine Positions Erroneously Notated). 
+To detect and quantify these conversions, we have created software called **PIGPEN** (Pipeline for Identification of Guanosine Positions Erroneously Notated).
 
 PIGPEN takes in alignment files (bam), ideally made with [STAR](https://github.com/alexdobin/STAR). Single and paired-end reads are supported, although paired-end reads are preferred (for reasons that will become clear later). To minimize the contribution of positions that appear as mutations due to non-ideal alignments, PIGPEN only considers uniquely aligned reads (mapping quality == 255). For now, it is required that paired-end reads be stranded, and that read 1 correspond to the sense strand. This is true for most, but not all, modern RNAseq library preparation protocols.
 
-                    ,-,-----,
-    PIGPEN     **** \ \ ),)`-'
-              <`--'> \ \` 
-              /. . `-----,
-    OINC! >  ('')  ,      @~
-              `-._,  ___  /
-\-|-|-|-|-|-|-|-| (( /  (( / -|-|-| 
-|-|-|-|-|-|-|-|- '''   ''' -|-|-|-
-\-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
+                        ,-,-----,
+        PIGPEN     **** \ \ ),)`-'
+                  <`--'> \ \`
+                  /. . `-----,
+        OINC! >  ('')  ,      @~
+                  `-._,  ___  /
+    -|-|-|-|-|-|-|-| (( / (( / -|-|-|
+    |-|-|-|-|-|-|-|- ''' ''' -|-|-|-
+    -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
 
-   Pipeline for Identification <br/>
-      Of Guanosine Positions <br/>
-       Erroneously Notated <br/>
+    Pipeline for Identification
+       Of Guanosine Positions
+        Erroneously Notated
 
 ## Requirements
 
 PIGPEN has the following prerequisites:
+
 - python >= 3.6
 - samtools >= 1.13
 - varscan >= 2.4.4
@@ -38,15 +39,15 @@ PIGPEN has the following prerequisites:
 
 ## Installation
 
-For now, installation can be done by cloning this repository. As PIPGEN matures, we will work towards getting this package on [bioconda](https://bioconda.github.io/). 
+For now, installation can be done by cloning this repository. As PIPGEN matures, we will work towards getting this package on [bioconda](https://bioconda.github.io/).
 
 ## SNPs
 
-8-OG-induced conversions are rare, and this rarity makes it imperative that contributions from conversions that are not due to oxidation are minimized.  A major source of apparent conversions is SNPs. It is therefore advantageous to find and mask SNPs in the data.
+8-OG-induced conversions are rare, and this rarity makes it imperative that contributions from conversions that are not due to oxidation are minimized. A major source of apparent conversions is SNPs. It is therefore advantageous to find and mask SNPs in the data.
 
 PIGPEN performs this by using [varscan](http://varscan.sourceforge.net/using-varscan.html) to find SNP positions. These locations are then excluded from all future analyses. Varscan parameters are controled by the PIGPEN parameters `--SNPcoverage` and `--SNPfreq` that control the depth and frequency required to call a SNP. We recommend being aggressive with these parameters. We often set them to 20 and 0.02, respectively.
 
-PIGPEN performs this SNP calling on control alignment files (`--controlBams`) in which the intended oxidation did not occur. PIGPEN will use the union of all SNPs found in these files for masking.  Whether or not to call SNPs at all (you definitely should) is controlled by `--useSNPs`.
+PIGPEN performs this SNP calling on control alignment files (`--controlBams`) in which the intended oxidation did not occur. PIGPEN will use the union of all SNPs found in these files for masking. Whether or not to call SNPs at all (you definitely should) is controlled by `--useSNPs`.
 
 This process can be time consuming. At the end, a file called **merged.vcf** is created in the current working directory. If this file is present, PIGPEN will assume that it should be used for SNP masking, allowing the process of identifying SNPs to be skipped.
 
@@ -73,8 +74,3 @@ After identifying the conversions present in each read and the cognate gene for 
 ## Statistical framework for comparing gene-level PORC values across conditions
 
 We are working on this.
-
-
-
-
-
