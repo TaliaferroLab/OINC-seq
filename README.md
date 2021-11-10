@@ -14,13 +14,13 @@ PIGPEN takes in alignment files (bam), ideally made with [STAR](https://github.c
               /. . `-----,
     OINC! >  ('')  ,      @~
               `-._,  ___  /
--|-|-|-|-|-|-|-| (( /  (( / -|-|-| 
+\-|-|-|-|-|-|-|-| (( /  (( / -|-|-| 
 |-|-|-|-|-|-|-|- '''   ''' -|-|-|-
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
+\-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
 
-   Pipeline for Identification 
-      Of Guanosine Positions
-       Erroneously Notated
+   Pipeline for Identification <br/>
+      Of Guanosine Positions <br/>
+       Erroneously Notated <br/>
 
 ## Requirements
 
