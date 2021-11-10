@@ -9,9 +9,10 @@ from filterbam import intersectreads, filterbam, intersectreads_multiprocess
 from getmismatches import iteratereads_pairedend, getmismatches
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
+import pickle
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description = 'pigpen for quantifying OINC-seq data')
+    parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--bam', type = str, help = 'Aligned reads (ideally STAR uniquely aligned reads) to quantify',
                         required = True)
     parser.add_argument('--controlBams', type = str, help = 'Comma separated list of alignments from control samples (i.e. those where no *induced* conversions are expected. Required if SNPs are to be considered.')
@@ -73,6 +74,13 @@ if __name__ == '__main__':
     print('Assigning reads to genes...')
     overlaps, numpairs = getReadOverlaps(filteredbam, args.geneBed, args.chromsizes)
     read2gene = processOverlaps(overlaps, numpairs)
+
+    #TESTING FOR SUBSAMPLING READS TO GET P VALUES
+    samplename = os.path.basename(args.bam)
+    with open(samplename + '.read2gene.pkl', 'wb') as outfh:
+        pickle.dump(read2gene, outfh)
+    with open(samplename + '.readconvs.pkl', 'wb') as outfh:
+        pickle.dump(convs, outfh)
 
     #Calculate number of conversions per gene
     numreadspergene, convsPerGene = getPerGene(convs, read2gene)

@@ -8,6 +8,20 @@ To detect and quantify these conversions, we have created software called **PIGP
 
 PIGPEN takes in alignment files (bam), ideally made with [STAR](https://github.com/alexdobin/STAR). Single and paired-end reads are supported, although paired-end reads are preferred (for reasons that will become clear later). To minimize the contribution of positions that appear as mutations due to non-ideal alignments, PIGPEN only considers uniquely aligned reads (mapping quality == 255). For now, it is required that paired-end reads be stranded, and that read 1 correspond to the sense strand. This is true for most, but not all, modern RNAseq library preparation protocols.
 
+                    ,-,-----,
+    PIGPEN     **** \ \ ),)`-'
+              <`--'> \ \` 
+              /. . `-----,
+    OINC! >  ('')  ,      @~
+              `-._,  ___  /
+-|-|-|-|-|-|-|-| (( /  (( / -|-|-| 
+|-|-|-|-|-|-|-|- '''   ''' -|-|-|-
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
+
+   Pipeline for Identification 
+      Of Guanosine Positions
+       Erroneously Notated
+
 ## Requirements
 
 PIGPEN has the following prerequisites:
