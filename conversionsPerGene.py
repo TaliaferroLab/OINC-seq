@@ -51,7 +51,7 @@ def getPerGene(convs, reads2gene):
 
     return numreadspergene, convsPerGene
 
-def writeConvsPerGene(numreadspergene, convsPerGene, outfile):
+def writeConvsPerGene(numreadspergene, convsPerGene, outfile, use_g_t, use_g_c):
     possibleconvs = [
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
         'g_a', 'g_t', 'g_c', 'g_g', 'g_n',
@@ -75,7 +75,16 @@ def writeConvsPerGene(numreadspergene, convsPerGene, outfile):
             convcounts = [str(x) for x in convcounts]
 
             totalG = c['g_g'] + c['g_c'] + c['g_t'] + c['g_a'] + c['g_n']
-            convG = c['g_c'] + c['g_t']
+            if use_g_t and use_g_c:
+                convG = c['g_c'] + c['g_t']
+            elif use_g_c and not use_g_t:
+                convG = c['g_c']
+            elif use_g_t and not use_g_c:
+                convG = c['g_t']
+            elif not use_g_t and not use_g_c:
+                print('ERROR: we have to be counting either G->T or G->C, if not both!')
+                sys.exit()
+                
             g_ccount = c['g_c']
             g_tcount = c['g_t']
 

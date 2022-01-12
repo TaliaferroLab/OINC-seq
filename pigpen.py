@@ -4,6 +4,7 @@
 import argparse
 import subprocess
 import os
+import sys
 from snps import getSNPs, recordSNPs
 from filterbam import intersectreads, filterbam, intersectreads_multiprocess
 from getmismatches import iteratereads_pairedend, getmismatches
@@ -13,8 +14,7 @@ import pickle
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--bam', type = str, help = 'Aligned reads (ideally STAR uniquely aligned reads) to quantify',
-                        required = True)
+    parser.add_argument('--bam', type = str, help = 'Aligned reads (ideally STAR uniquely aligned reads) to quantify', required = True)
     parser.add_argument('--controlBams', type = str, help = 'Comma separated list of alignments from control samples (i.e. those where no *induced* conversions are expected. Required if SNPs are to be considered.')
     parser.add_argument('--genomeFasta', type = str, help = 'Genome sequence in fasta format. Required if SNPs are to be considered.')
     parser.add_argument('--geneBed', type = str, help = 'Bed file of genomic regions to quantify. Fourth field must be gene ID.')
@@ -25,8 +25,15 @@ if __name__ == '__main__':
     parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
     parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.02', default = 0.02)
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
+    parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
+    parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
     parser.add_argument('--requireMultipleConv', action = 'store_true', help = 'Only consider conversions seen in reads with multiple G->C + G->T conversions?')
     args = parser.parse_args()
+
+    #We have to be either looking for G->T or G->C, if not both
+    if not args.use_g_t and not args.use_g_c:
+        print('We have to either be looking for G->T or G->C, if not both! Add argument --use_g_t and/or --use_g_c.')
+        sys.exit()
 
     #Make index for bam if there isn't one already
     bamindex = args.bam + '.bai'
@@ -65,9 +72,9 @@ if __name__ == '__main__':
 
     #Identify conversions
     if args.nproc == 1:
-        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, snps, args.requireMultipleConv, 'high')
+        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, snps, args.requireMultipleConv, 'high')
     elif args.nproc > 1:
-        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, args.requireMultipleConv, args.nproc)
+        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, args.requireMultipleConv, args.nproc, args.use_g_t, args.use_g_c)
 
 
     #Assign reads to genes
@@ -75,16 +82,9 @@ if __name__ == '__main__':
     overlaps, numpairs = getReadOverlaps(filteredbam, args.geneBed, args.chromsizes)
     read2gene = processOverlaps(overlaps, numpairs)
 
-    #TESTING FOR SUBSAMPLING READS TO GET P VALUES
-    samplename = os.path.basename(args.bam)
-    with open(samplename + '.read2gene.pkl', 'wb') as outfh:
-        pickle.dump(read2gene, outfh)
-    with open(samplename + '.readconvs.pkl', 'wb') as outfh:
-        pickle.dump(convs, outfh)
-
     #Calculate number of conversions per gene
     numreadspergene, convsPerGene = getPerGene(convs, read2gene)
-    writeConvsPerGene(numreadspergene, convsPerGene, args.output)
+    writeConvsPerGene(numreadspergene, convsPerGene, args.output, args.use_g_t, args.use_g_c)
 
 
 

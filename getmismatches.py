@@ -51,7 +51,7 @@ def iteratereads_singleend(bam, snps = None):
 
                 #Check mapping quality
                 #For nextgenmap, max mapq is 60
-                if read.mapping_quality < 50:
+                if read.mapping_quality < 255:
                     continue
                 
                 queryname = read.query_name
@@ -175,7 +175,8 @@ def findsnps(controlbams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
 
     return snps
 
-def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipleConv = False, verbosity = 'high'):
+
+def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, snps=None, requireMultipleConv=False, verbosity='high'):
     #Iterate over reads in a paired end alignment file.
     #Find nt conversion locations for each read.
     #For locations interrogated by both mates of read pair, conversion must exist in both mates in order to count
@@ -241,7 +242,7 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipl
             read1qualities = list(read1.query_qualities) #phred scores
             read2qualities = list(read2.query_qualities)
 
-            convs_in_read = getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyConsiderOverlap, requireMultipleConv)
+            convs_in_read = getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyConsiderOverlap, requireMultipleConv, use_g_t, use_g_c)
             queriednts.append(sum(convs_in_read.values()))
             convs[queryname] = convs_in_read
 
@@ -253,7 +254,7 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, snps = None, requireMultipl
     return convs, readcounter
 
 
-def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyoverlap, requireMultipleConv):
+def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyoverlap, requireMultipleConv, use_g_t, use_g_c):
     #remove tuples that have None
     #These are either intronic or might have been soft-clipped
     #Tuples are (querypos, refpos, refsequence)
@@ -413,12 +414,28 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
 
     #if we are requiring there be multiple g_t or g_c, implement that here
     if requireMultipleConv:
-        if convs['g_t'] + convs['g_c'] >= 2:
-            pass
-        elif convs['g_t'] + convs['g_c'] < 2:
-            convs['g_t'] = 0
-            convs['g_c'] = 0
-    
+        if use_g_t and use_g_c:
+            if convs['g_t'] + convs['g_c'] >= 2:
+                pass
+            elif convs['g_t'] + convs['g_c'] < 2:
+                convs['g_t'] = 0
+                convs['g_c'] = 0
+        elif use_g_t and not use_g_c:
+            if convs['g_t'] >= 2:
+                pass
+            elif convs['g_t'] < 2:
+                convs['g_t'] = 0
+                convs['g_c'] = 0
+        elif use_g_c and not use_g_t:
+            if convs['g_c'] >= 2:
+                pass
+            elif convs['g_c'] < 2:
+                convs['g_c'] = 0
+                convs['g_t'] = 0
+        elif not use_g_t and not use_g_c:
+            print('ERROR: we have to be looking for at least either G->T or G->C if not both!!')
+            sys.exit()
+
     return convs
 
 
@@ -534,7 +551,7 @@ def split_bam(bam, nproc):
     return splitbams
 
 
-def getmismatches(bam, onlyConsiderOverlap, snps, requireMultipleConv, nproc):
+def getmismatches(bam, onlyConsiderOverlap, snps, requireMultipleConv, nproc, use_g_t, use_g_c):
     #Actually run the mismatch code (calling iteratereads_pairedend)
     #use multiprocessing
     #If there's only one processor, easier to use iteratereads_pairedend() directly.
@@ -544,7 +561,7 @@ def getmismatches(bam, onlyConsiderOverlap, snps, requireMultipleConv, nproc):
     splitbams = split_bam(bam, int(nproc))
     argslist = []
     for x in splitbams:
-        argslist.append((x, bool(onlyConsiderOverlap), snps, bool(requireMultipleConv), 'low'))
+        argslist.append((x, bool(onlyConsiderOverlap), bool(use_g_t), bool(use_g_c), snps, bool(requireMultipleConv), 'low'))
 
     #items returned from iteratereads_pairedend are in a list, one per process
     totalreadcounter = 0 #number of reads across all the split bams
