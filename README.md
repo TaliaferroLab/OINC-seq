@@ -37,6 +37,14 @@ PIGPEN has the following prerequisites:
 - bamtools >= 2.5.1
 - bedtools >= 2.30.0
 
+BACON has the following prerequisites:
+
+- python >= 3.6
+- statsmodels >= 0.13.2
+- numpy >= 1.21
+- rpy2 >= 3.4.5
+- R >= 4.1
+
 ## Installation
 
 For now, installation can be done by cloning this repository. As PIPGEN matures, we will work towards getting this package on [bioconda](https://bioconda.github.io/).
@@ -47,7 +55,7 @@ For now, installation can be done by cloning this repository. As PIPGEN matures,
 
 PIGPEN performs this by using [varscan](http://varscan.sourceforge.net/using-varscan.html) to find SNP positions. These locations are then excluded from all future analyses. Varscan parameters are controled by the PIGPEN parameters `--SNPcoverage` and `--SNPfreq` that control the depth and frequency required to call a SNP. We recommend being aggressive with these parameters. We often set them to 20 and 0.02, respectively.
 
-PIGPEN performs this SNP calling on control alignment files (`--controlBams`) in which the intended oxidation did not occur. PIGPEN will use the union of all SNPs found in these files for masking. Whether or not to call SNPs at all (you definitely should) is controlled by `--useSNPs`.
+PIGPEN performs this SNP calling on control alignment files (`--controlBams`) in which the intended oxidation did not occur. PIGPEN will use the union of all SNPs found in these files for masking. Whether or not to call SNPs at all (you probably should) is controlled by `--useSNPs`.
 
 This process can be time consuming. At the end, a file called **merged.vcf** is created in the current working directory. If this file is present, PIGPEN will assume that it should be used for SNP masking, allowing the process of identifying SNPs to be skipped.
 
@@ -71,6 +79,29 @@ For now, PIGPEN using `bedtools` and a supplied bed file of gene locations (`--g
 
 After identifying the conversions present in each read and the cognate gene for each read, the number of conversions for each gene is calculated. We have observed that the overall rate of conversions (not just G -> T + G -> C, but all conversions) can vary signficantly from sample to sample, presumably due to a technical effect in library preparation. For this reason, PIGPEN calculates **PORC** (Proportion of Relevant Conversions) values. This is the log2 ratio of the relevant conversion rate ([G -> T + G -> C] / total number of reference G encountered) to the overall conversion rate (total number of all conversions / total number of positions interrogated). PORC therefore normalizes to the overall rate of conversions, removing this technical effect.
 
+PIGPEN can use G -> T conversions, G -> C conversions, or both when calculating PORC values. This behavior is controlled by supplying the options `--use_g_t` and `--use_g_c`.
+
 ## Statistical framework for comparing gene-level PORC values across conditions
 
-We are working on this.
+We could simply compare PORC values across conditions, but with that approach we lose information about the number of counts (conversions) that went into the PORC calculation.
+
+For each gene, PIGPEN calculates the number of relevant conversions (G -> T + G -> C) as well as all other conversions encountered. Each gene therefore ends up with a 2x2 contingency table of the following form:
+
+|| converted | not converted |
+| ----------------|---------------|-------- |
+| G -> C or G -> T | a | b | 
+| other conversion | c | d | 
+
+We then want to compare groups (replicates) of contingency tables across conditions. BACON (Bioinformatic Analysis of the Conversion of Nucleotides) performs this comparison using a binomial linear mixed-effects model. Replicates are modeled as random effects.
+
+`full model = conversions ~ nucleotide + condition + nucleotide:condition + (1 | replicate)`
+
+`null model = conversions ~ nucleotide + condition + (1 | replicate)`
+
+The two models are then compared using a likelihood ratio test.
+
+As input, BACON takes a tab-delimited, headered file of the following form with one row per sample:
+
+| file | sample | condition |
+| -----|--------|-----------|
+| /path/to/pigpen/output | sample name | condition ID|
