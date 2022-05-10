@@ -81,6 +81,8 @@ if __name__ == '__main__':
     print('Assigning reads to genes...')
     overlaps, numpairs = getReadOverlaps(filteredbam, args.geneBed, args.chromsizes)
     read2gene = processOverlaps(overlaps, numpairs)
+    os.remove(filteredbam)
+    os.remove(filteredbam + '.bai')
 
     #Calculate number of conversions per gene
     numreadspergene, convsPerGene = getPerGene(convs, read2gene)
