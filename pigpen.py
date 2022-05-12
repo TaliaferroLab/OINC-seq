@@ -27,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
     parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
     parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
-    parser.add_argument('--requireMultipleConv', action = 'store_true', help = 'Only consider conversions seen in reads with multiple G->C + G->T conversions?')
+    parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for conversions to be counted. Default is 1.', default = 1)
     args = parser.parse_args()
 
     #We have to be either looking for G->T or G->C, if not both
@@ -72,9 +72,9 @@ if __name__ == '__main__':
 
     #Identify conversions
     if args.nproc == 1:
-        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, snps, args.requireMultipleConv, 'high')
+        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, snps, args.nConv, 'high')
     elif args.nproc > 1:
-        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, args.requireMultipleConv, args.nproc, args.use_g_t, args.use_g_c)
+        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, args.nConv, args.nproc, args.use_g_t, args.use_g_c)
 
 
     #Assign reads to genes
