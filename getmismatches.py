@@ -260,8 +260,27 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
     #Tuples are (querypos, refpos, refsequence)
     #If there is a substitution, refsequence is lower case
 
-    #In quantseq-fwd, r1 is always sense strand
+    #remove positions where querypos is None
+    #i'm pretty sure these query positions won't have quality scores
+    read1alignedpairs = [x for x in read1alignedpairs if x[0] != None]
+    read2alignedpairs = [x for x in read2alignedpairs if x[0] != None]
 
+    #Add quality scores to alignedpairs tuples
+    #will now be (querypos, refpos, refsequence, qualityscore)
+    read1ap_withq = []
+    for ind, x in enumerate(read1alignedpairs):
+        x += (read1qualities[ind],)
+        read1ap_withq.append(x)
+    read1alignedpairs = read1ap_withq
+    
+    read2ap_withq = []
+    for ind, x in enumerate(read2alignedpairs):
+        x += (read2qualities[ind],)
+        read2ap_withq.append(x)
+    read2alignedpairs = read1ap_withq
+
+    #Now remove positions where refsequence is None
+    #These may be places that got soft-clipped
     read1alignedpairs = [x for x in read1alignedpairs if None not in x]
     read2alignedpairs = [x for x in read2alignedpairs if None not in x]
 
@@ -287,35 +306,39 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
     #These locations (as defined by their reference positions) would be found both in read1alignedpairs and read2alignedpairs
 
     #Get the ref positions queried by the two reads
-    r1dict = {} #{reference position : [queryposition, reference sequence]}
+    r1dict = {} #{reference position : [queryposition, reference sequence, quality]}
     r2dict = {}
     for x in read1alignedpairs:
-        r1dict[int(x[1])] = [x[0], x[2]]
+        r1dict[int(x[1])] = [x[0], x[2], x[3]]
     for x in read2alignedpairs:
-        r2dict[int(x[1])] = [x[0], x[2]]
+        r2dict[int(x[1])] = [x[0], x[2], x[3]]
 
-    mergedalignedpairs = {} # {refpos : [R1querypos, R2querypos, R1refsequence, R2refsequence]}
+    mergedalignedpairs = {} # {refpos : [R1querypos, R2querypos, R1refsequence, R2refsequence, R1quality, R2quality]}
     #For positions only in R1 or R2, querypos and refsequence are NA for the other read
     for refpos in r1dict:
         r1querypos = r1dict[refpos][0]
         r1refseq = r1dict[refpos][1]
+        r1quality = r1dict[refpos][2]
         if refpos in mergedalignedpairs: #this should not be possible because we are looking at r1 first
             r2querypos = mergedalignedpairs[refpos][1]
             r2refseq = mergedalignedpairs[refpos][3]
-            mergedalignedpairs[refpos] = [r1querypos, r2querypos, r1refseq, r2refseq]
+            r2quality = mergedalignedpairs[refpos][5]
+            mergedalignedpairs[refpos] = [r1querypos, r2querypos, r1refseq, r2refseq, r1quality, r2quality]
         else:
-            mergedalignedpairs[refpos] = [r1querypos, 'NA', r1refseq, 'NA']
+            mergedalignedpairs[refpos] = [r1querypos, 'NA', r1refseq, 'NA', r1quality, 'NA']
 
     for refpos in r2dict:
         #same thing
         r2querypos = r2dict[refpos][0]
         r2refseq = r2dict[refpos][1]
+        r2quality = r2dict[refpos][2]
         if refpos in mergedalignedpairs: #if we saw it for r1
             r1querypos = mergedalignedpairs[refpos][0]
             r1refseq = mergedalignedpairs[refpos][2]
-            mergedalignedpairs[refpos] = [r1querypos, r2querypos, r1refseq, r2refseq]
+            r1quality = mergedalignedpairs[refpos][4]
+            mergedalignedpairs[refpos] = [r1querypos, r2querypos, r1refseq, r2refseq, r1quality, r2quality]
         else:
-            mergedalignedpairs[refpos] = ['NA', r2querypos, 'NA', r2refseq]
+            mergedalignedpairs[refpos] = ['NA', r2querypos, 'NA', r2refseq, 'NA', r2quality]
 
 
     #Now go through mergedalignedpairs, looking for conversions.
@@ -327,6 +350,8 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
         r2querypos = mergedalignedpairs[refpos][1]
         r1refseq = mergedalignedpairs[refpos][2]
         r2refseq = mergedalignedpairs[refpos][3]
+        r1quality = mergedalignedpairs[refpos][4]
+        r2quality = mergedalignedpairs[refpos][5]
 
         if r1querypos != 'NA' and r2querypos == 'NA': #this position queried by r1 only
             if read1strand == '-':
@@ -345,7 +370,7 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
                     querynt = revcomp(querynt)
                 conv = r1refseq.lower() + '_' + querynt.lower()
 
-            if read1qualities[r1querypos] >= 30 and onlyoverlap == False:
+            if r1quality >= 30 and onlyoverlap == False:
                 convs[conv] +=1
             else:
                 pass
@@ -369,7 +394,7 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
                     querynt = revcomp(querynt)
                 conv = r2refseq.lower() + '_' + querynt.lower()
 
-            if read2qualities[r2querypos] >= 30 and onlyoverlap == False:
+            if r2quality >= 30 and onlyoverlap == False:
                 convs[conv] +=1
             else:
                 pass
@@ -382,8 +407,8 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
             if r1refseq == 'N' or r2refseq == 'N' or r1refseq == 'n' or r2refseq == 'n':
                 continue
 
-            #If the position is not high quality in either r1 or r2, skip it
-            if read1qualities[r1querypos] < 30 and read2qualities[r2querypos] < 30:
+            #If the position is not high quality in both r1 and r2, skip it
+            if r1quality < 30 and r2quality < 30:
                 continue
 
             if r1refseq.isupper() and r2refseq.isupper(): #both reads agree it is not a conversion
@@ -591,21 +616,6 @@ def getmismatches(bam, onlyConsiderOverlap, snps, nConv, nproc, use_g_t, use_g_c
 
         
 if __name__ == '__main__':
-    snps = findsnps('trash', None, 20, 0.02) #control bams (comma separated), genomefasta
-
-    #convs = iteratereads_singleend(sys.argv[1], None)
-    convs = iteratereads_pairedend(sys.argv[1], True, snps, False)
-    #with open('OINC3.mDBF.subsampled.filtered.convs.pkl', 'wb') as outfh:
-        #pickle.dump(convs, outfh)
-    #summarize_convs(convs, sys.argv[2])
-    overlaps, numpairs = getReadOverlaps(sys.argv[1], sys.argv[2], sys.argv[3]) #bam, geneBed, chrom.sizes
-    read2gene = processOverlaps(overlaps, numpairs)
-    with open('read2gene.pkl', 'wb') as outfh:
-        pickle.dump(read2gene, outfh)
-    with open('convs.pkl', 'wb') as outfh:
-        pickle.dump(convs, outfh)
-
-    numreadspergene, convsPerGene = getPerGene(convs, read2gene)
-    writeConvsPerGene(numreadspergene, convsPerGene, sys.argv[4]) #output
+    iteratereads_pairedend(sys.argv[1], False, True, True, 1, None, 'high')
 
     
