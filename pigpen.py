@@ -6,6 +6,7 @@ import subprocess
 import os
 import sys
 from snps import getSNPs, recordSNPs
+from maskpositions import readmaskbed
 from filterbam import intersectreads, filterbam, intersectreads_multiprocess
 from getmismatches import iteratereads_pairedend, getmismatches
 from assignreads import getReadOverlaps, processOverlaps
@@ -22,6 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type = str, help = 'Output file of conversion rates for each gene.')
     parser.add_argument('--nproc', type = int, help = 'Number of processors to use. Default is 1.', default = 1)
     parser.add_argument('--useSNPs', action = 'store_true', help = 'Consider SNPs?')
+    parser.add_argument('--maskbed', help = 'Optional. Bed file of positions to mask from analysis.', default = None)
     parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
     parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.02', default = 0.02)
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
@@ -60,6 +62,13 @@ if __name__ == '__main__':
     elif not args.useSNPs:
         snps = None
 
+    #Get positions to manually mask if given
+    if args.maskbed:
+        print('Getting positions to manually mask...')
+        maskpositions = readmaskbed(args.maskbed)
+    elif not args.maskbed:
+        maskpositions = None
+
     #Filter bam for reads contained within entries in geneBed
     #This will reduce the amount of time it takes to find conversions
     print('Filtering bam for reads contained within regions of interest...')
@@ -72,9 +81,9 @@ if __name__ == '__main__':
 
     #Identify conversions
     if args.nproc == 1:
-        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, snps, args.nConv, 'high')
+        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.nConv, snps, maskpositions, 'high')
     elif args.nproc > 1:
-        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, args.nConv, args.nproc, args.use_g_t, args.use_g_c)
+        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.nproc, args.use_g_t, args.use_g_c)
 
 
     #Assign reads to genes

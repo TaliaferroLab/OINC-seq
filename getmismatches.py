@@ -176,7 +176,7 @@ def findsnps(controlbams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
     return snps
 
 
-def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, nConv, snps=None, verbosity='high'):
+def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, nConv, snps=None, maskpositions=None, verbosity='high'):
     #Iterate over reads in a paired end alignment file.
     #Find nt conversion locations for each read.
     #For locations interrogated by both mates of read pair, conversion must exist in both mates in order to count
@@ -216,14 +216,33 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, nConv, sn
             queryname = read1.query_name
             chrm = read1.reference_name
 
+            #Get a set of positions to mask (snps + locations we want to mask)
             #Get a set of snp locations if we have them
             if snps:
                 if chrm in snps:
-                    snplocations = snps[chrm] #set of coordinates to mask
+                    snplocations = snps[chrm] #set of snp coordinates to mask
                 else:
                     snplocations = None
             else:
                 snplocations = None
+
+            #Get a set of locations to mask if we have them
+            if maskpositions:
+                if chrm in maskpositions:
+                    masklocations = maskpositions[chrm] #set of coordinates to manually mask
+                else:
+                    masklocations = None
+            else:
+                masklocations = None
+
+            #combine snps and manually masked positions into one set
+            #this combined set will be masklocations
+            if snplocations and masklocations:
+                masklocations.update(snplocations)
+            elif snplocations and not masklocations:
+                masklocations = snplocations
+            elif masklocations and not snplocations:
+                masklocations = masklocations
 
             read1queryseq = read1.query_sequence
             read1alignedpairs = read1.get_aligned_pairs(with_seq = True)
@@ -242,7 +261,7 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, nConv, sn
             read1qualities = list(read1.query_qualities) #phred scores
             read2qualities = list(read2.query_qualities)
 
-            convs_in_read = getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyConsiderOverlap, nConv, use_g_t, use_g_c)
+            convs_in_read = getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, masklocations, onlyConsiderOverlap, nConv, use_g_t, use_g_c)
             queriednts.append(sum(convs_in_read.values()))
             convs[queryname] = convs_in_read
 
@@ -254,7 +273,7 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, nConv, sn
     return convs, readcounter
 
 
-def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, snplocations, onlyoverlap, nConv, use_g_t, use_g_c):
+def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq, read2queryseq, read1qualities, read2qualities, read1strand, read2strand, masklocations, onlyoverlap, nConv, use_g_t, use_g_c):
     #remove tuples that have None
     #These are either intronic or might have been soft-clipped
     #Tuples are (querypos, refpos, refsequence)
@@ -284,11 +303,11 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
     read1alignedpairs = [x for x in read1alignedpairs if None not in x]
     read2alignedpairs = [x for x in read2alignedpairs if None not in x]
 
-    #if we have snps, remove their locations from read1alignedpairs and read2alignedpairs
-    #snplocations is a set of 0-based coordinates of snp locations to mask
-    if snplocations:
-        read1alignedpairs = [x for x in read1alignedpairs if x[1] not in snplocations]
-        read2alignedpairs = [x for x in read2alignedpairs if x[1] not in snplocations]
+    #if we have locations to mask, remove their locations from read1alignedpairs and read2alignedpairs
+    #masklocations is a set of 0-based coordinates of snp locations to mask
+    if masklocations:
+        read1alignedpairs = [x for x in read1alignedpairs if x[1] not in masklocations]
+        read2alignedpairs = [x for x in read2alignedpairs if x[1] not in masklocations]
     
     convs = {} #counts of conversions x_y where x is reference sequence and y is query sequence
 
@@ -575,7 +594,7 @@ def split_bam(bam, nproc):
     return splitbams
 
 
-def getmismatches(bam, onlyConsiderOverlap, snps, nConv, nproc, use_g_t, use_g_c):
+def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, nproc, use_g_t, use_g_c):
     #Actually run the mismatch code (calling iteratereads_pairedend)
     #use multiprocessing
     #If there's only one processor, easier to use iteratereads_pairedend() directly.
@@ -586,7 +605,7 @@ def getmismatches(bam, onlyConsiderOverlap, snps, nConv, nproc, use_g_t, use_g_c
     argslist = []
     for x in splitbams:
         argslist.append((x, bool(onlyConsiderOverlap), bool(
-            use_g_t), bool(use_g_c), nConv, snps, 'low'))
+            use_g_t), bool(use_g_c), nConv, snps, maskpositions, 'low'))
 
     #items returned from iteratereads_pairedend are in a list, one per process
     totalreadcounter = 0 #number of reads across all the split bams
