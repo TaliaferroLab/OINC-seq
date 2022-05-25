@@ -29,12 +29,24 @@ if __name__ == '__main__':
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
     parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
     parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
+    parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions?')
+    parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions?')
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for conversions to be counted. Default is 1.', default = 1)
     args = parser.parse_args()
 
     #We have to be either looking for G->T or G->C, if not both
     if not args.use_g_t and not args.use_g_c:
         print('We have to either be looking for G->T or G->C, if not both! Add argument --use_g_t and/or --use_g_c.')
+        sys.exit()
+
+    #We have to be using either read1 or read2 if not both
+    if not args.use_read1 and not args.use_read2:
+        print('We need to use read1 or read2, if not both! Add argument --use_read1 and/or --use_read2.')
+        sys.exit()
+
+    #If we want to only consider overlap, we have to be using both read1 and read2
+    if not args.onlyConsiderOverlap and not args.use_read1 or not args.use_read2:
+        print('If we are only going to consider overlap between paired reads, we must use both read1 and read2.')
         sys.exit()
 
     #Make index for bam if there isn't one already
@@ -81,9 +93,9 @@ if __name__ == '__main__':
 
     #Identify conversions
     if args.nproc == 1:
-        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.nConv, snps, maskpositions, 'high')
+        convs, readcounter = iteratereads_pairedend(filteredbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, snps, maskpositions, 'high')
     elif args.nproc > 1:
-        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.nproc, args.use_g_t, args.use_g_c)
+        convs = getmismatches(filteredbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
 
     #Assign reads to genes
