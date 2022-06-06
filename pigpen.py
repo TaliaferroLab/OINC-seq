@@ -45,7 +45,7 @@ if __name__ == '__main__':
         sys.exit()
 
     #If we want to only consider overlap, we have to be using both read1 and read2
-    if not args.onlyConsiderOverlap and not args.use_read1 or not args.use_read2:
+    if args.onlyConsiderOverlap and (not args.use_read1 or not args.use_read2):
         print('If we are only going to consider overlap between paired reads, we must use both read1 and read2.')
         sys.exit()
 
