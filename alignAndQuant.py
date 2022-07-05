@@ -14,7 +14,7 @@ import argparse
 #written to temporary fastq files (<samplename>.unique.r1..fq.gz), which are then used for salmon and postmaster.
 
 #When runSTAR(), bamtofastq(), runSalmon(), and runPostmaster() are run in succession, the output is a directory called <samplename>. 
-#In this directory, the STAR output is <samplename>Aligned.sortedByCoord.out.bam in STAR/<samplename>,
+#In this directory, the STAR output is <samplename>Aligned.sortedByCoord.out.bam in STAR/,
 #the salmon output is <samplename>.quant.sf and <samplename>.salmon.bam in salmon/,
 #and the postmaster output is <samplename>.postmaster.bam in postmaster/
 
