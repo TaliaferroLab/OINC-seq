@@ -13,8 +13,10 @@ import argparse
 #Reads are aligned to the genome using STAR. This bam file will be used for mutation calling. Uniquely aligning reads from this alignment are then
 #written to temporary fastq files (<samplename>.unique.r1..fq.gz), which are then used for salmon and postmaster.
 
-#When runSTAR(), bamtofastq(), runSalmon(), and runPostmaster() are run in succession, the output is a file called <samplename>.postmaster.bam in the postmaster/ 
-#and <samplename>Aligned.sortedByCoord.out.bam in STAR/<samplename> and <samplename>.quant.sf in salmon/
+#When runSTAR(), bamtofastq(), runSalmon(), and runPostmaster() are run in succession, the output is a directory called <samplename>. 
+#In this directory, the STAR output is <samplename>Aligned.sortedByCoord.out.bam in STAR/<samplename>,
+#the salmon output is <samplename>.quant.sf and <samplename>.salmon.bam in salmon/,
+#and the postmaster output is <samplename>.postmaster.bam in postmaster/
 
 #Requires STAR, salmon(>= 1.9.0), and postmaster be in user's PATH.
 
