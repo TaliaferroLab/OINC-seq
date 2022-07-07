@@ -13,7 +13,7 @@ def getSNPs(bams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
     if not minCoverage:
         minCoverage = 20
     if not minVarFreq:
-        minVarFreq = 0.02
+        minVarFreq = 0.2
 
     #if we already made a vcf, don't make another one
     if os.path.exists('merged.vcf'):
