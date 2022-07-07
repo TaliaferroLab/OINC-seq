@@ -41,6 +41,14 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     
     subprocess.call(command)
 
+    #make index
+    bam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
+    bamindex = bam + '.bai'
+    if not os.path.exists(bamindex):
+        indexCMD = 'samtools index ' + bam
+        index = subprocess.Popen(indexCMD, shell=True)
+        index.wait()
+
     print('Finished STAR for {0}!'.format(samplename))
 
 
