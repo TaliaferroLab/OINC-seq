@@ -270,8 +270,8 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, use_read1
 
     pysam.set_verbosity(save)
     #Pickle and write convs
-    with open('convs.pkl', 'wb') as outfh:
-        pickle.dump(convs, outfh)
+    #with open('convs.pkl', 'wb') as outfh:
+        #pickle.dump(convs, outfh)
 
     return convs, readcounter
 
