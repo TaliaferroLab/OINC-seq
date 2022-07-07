@@ -269,7 +269,10 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, use_read1
         print('Queried {0} read pairs in {1}.'.format(readcounter, os.path.basename(bam)))
 
     pysam.set_verbosity(save)
-    #Pickle and write convs?
+    #Pickle and write convs
+    with open('convs.pkl', 'wb') as outfh:
+        pickle.dump(convs, outfh)
+
     return convs, readcounter
 
 
@@ -653,7 +656,7 @@ def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, nproc, u
 
         
 if __name__ == '__main__':
-    convs, readcounter = iteratereads_pairedend(sys.argv[1], False, True, True, True, False, 1, None, None, 'high')
-    summarize_convs(convs, sys.argv[2])
+    convs, readcounter = iteratereads_pairedend(sys.argv[1], False, True, True, True, True, 1, None, None, 'high')
+    #summarize_convs(convs, sys.argv[2])
 
     
