@@ -9,16 +9,11 @@ import os
 import sys
 
 #This will take in a list of bams and identify variants, creating vcf files for each
-def getSNPs(bams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
+def getSNPs(bams, genomefasta, minCoverage = 20, minVarFreq = 0.2):
     if not minCoverage:
         minCoverage = 20
     if not minVarFreq:
         minVarFreq = 0.2
-
-    #if we already made a vcf, don't make another one
-    if os.path.exists('merged.vcf'):
-        print('A merged vcf files already exists! Not making another one...')
-        return None
 
     vcfFileNames = []
 
@@ -53,11 +48,10 @@ def getSNPs(bams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
         with open('vcfconcat.log', 'w') as logfh:
             vcfFileNames = vcfFileNames * 2
             vcfFiles = ' '.join(vcfFileNames)
-            print(vcfFiles)
-            concatCMD = 'bcftools merge --force-samples -m snps -O z --output merged.vcf ' + vcfFiles
+            concatCMD = 'bcftools merge --force-samples -m snps -O z --filter-logic x --output merged.vcf ' + vcfFiles
             concat = subprocess.Popen(concatCMD, shell = True, stderr = logfh)
             concat.wait()
-        filetorecord = vcfFileNames[0]
+        vcfFileNames = [vcfFileNames[0]]
     elif len(vcfFileNames) > 1:
         with open('vcfconcat.log', 'w') as logfh:
             vcfFiles = ' '.join(vcfFileNames)
