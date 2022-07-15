@@ -133,6 +133,9 @@ def runPostmaster(samplename, nthreads):
 
     command = ['samtools', 'index', outputfile]
     subprocess.call(command)
+
+    #We don't need the salmon alignment file anymore, and it's pretty big
+    os.remove(salmonbam)
     
     print('Finished postmaster for {0}!'.format(samplename))
 
