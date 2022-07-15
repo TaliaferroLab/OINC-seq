@@ -32,7 +32,7 @@ Following the creation of alignment files produced by `STAR` and `postmaster` as
 
 PIGPEN has the following prerequisites:
 
-- python >= 3.6
+- python >= 3.8
 - samtools >= 1.15
 - varscan >= 2.4.4
 - bcftools >= 1.15
