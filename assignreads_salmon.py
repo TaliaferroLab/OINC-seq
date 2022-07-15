@@ -234,6 +234,8 @@ def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, u
             #Format numbers for printing
             if type(numreads) == float:
                 numreads = '{:.2f}'.format(numreads)
+            if type(convG) == float:
+                convG = '{:.2f}'.format(convG)
             if type(totalG) == float:
                 totalG = '{:.2f}'.format(totalG)
             if type(convGrate) == float:
