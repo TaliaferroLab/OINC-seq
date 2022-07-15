@@ -152,7 +152,7 @@ def readspergene(quantsf, tx2gene):
     return genecounts
 
 
-def writeOutput(geneconvs, genecounts, geneid2genename, outfile, use_g_t, use_g_c):
+def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, use_g_t, use_g_c):
     #Write number of conversions and readcounts for genes.
     possibleconvs = [
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
@@ -161,6 +161,9 @@ def writeOutput(geneconvs, genecounts, geneid2genename, outfile, use_g_t, use_g_
         't_a', 't_t', 't_c', 't_g', 't_n']
 
     with open(outfile, 'w') as outfh:
+        #Write arguments for this pigpen run
+        for arg in sampleparams:
+            outfh.write('#' + arg + '\t' + str(sampleparams[arg]) + '\n')
         #total G is number of ref Gs encountered
         #convG is g_t + g_c (the ones we are interested in)
         outfh.write(('\t').join(['GeneID', 'GeneName', 'numreads'] + possibleconvs + [
@@ -229,6 +232,10 @@ def writeOutput(geneconvs, genecounts, geneid2genename, outfile, use_g_t, use_g_
                 porc = 'NA'
 
             #Format numbers for printing
+            if type(numreads) == float:
+                numreads = '{:.2f}'.format(numreads)
+            if type(totalG) == float:
+                totalG = '{:.2f}'.format(totalG)
             if type(convGrate) == float:
                 convGrate = '{:.2e}'.format(convGrate)
             if type(g_trate) == float:

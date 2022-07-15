@@ -13,11 +13,12 @@ from assignreads_salmon import getpostmasterassignments, assigntotxs, collapseto
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--samplenames', type = str, help = 'Comma separated list of samples to quantify.', required = True)
-    parser.add_argument('--controlsamples', type = str, help = 'Comma separated list of control samples (i.e. those where no *induced* conversions are expected). May be a subset of samplenames. Required if SNPs are to be considered.')
+    parser.add_argument('--controlsamples', type = str, help = 'Comma separated list of control samples (i.e. those where no *induced* conversions are expected). May be a subset of samplenames. Required if SNPs are to be considered and a snpfile is not supplied.')
     parser.add_argument('--gff', type = str, help = 'Genome annotation in gff format.')
     parser.add_argument('--genomeFasta', type = str, help = 'Genome sequence in fasta format. Required if SNPs are to be considered.')
     parser.add_argument('--nproc', type = int, help = 'Number of processors to use. Default is 1.', default = 1)
     parser.add_argument('--useSNPs', action = 'store_true', help = 'Consider SNPs?')
+    parser.add_argument('--snpfile', type = str, help = 'VCF file of snps to mask. If --useSNPs but a --snpfile is not supplied, a VCF of snps will be created using --controlsamples.')
     parser.add_argument('--maskbed', help = 'Optional. Bed file of positions to mask from analysis.', default = None)
     parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
     parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.2', default = 0.2)
@@ -27,7 +28,14 @@ if __name__ == '__main__':
     parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions?')
     parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions?')
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for conversions to be counted. Default is 1.', default = 1)
+    parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
     args = parser.parse_args()
+
+    #Store command line arguments
+    suppliedargs = {}
+    for arg in vars(args):
+        if arg != 'samplenames':
+            suppliedargs[arg] = getattr(args, arg)
 
     #Take in list of samplenames to run pigpen on
     #Derive quant.sf, STAR bams, and postmaster bams
@@ -37,15 +45,16 @@ if __name__ == '__main__':
     postmasterbams = [os.path.join(x, 'postmaster', '{0}.postmaster.bam'.format(x)) for x in samplenames]
 
     #Take in list of control samples, make list of their corresponding star bams for SNP calling
-    controlsamples = args.controlsamples.split(',')
-    controlindicies = []
-    for ind, x in enumerate(samplenames):
-        if x in controlsamples:
-            controlindicies.append(ind)
+    if args.controlsamples:
+        controlsamples = args.controlsamples.split(',')
+        controlindicies = []
+        for ind, x in enumerate(samplenames):
+            if x in controlsamples:
+                controlindicies.append(ind)
 
-    controlstarbams = []
-    for x in controlindicies:
-        controlstarbams.append(starbams[x])
+        controlstarbams = []
+        for x in controlindicies:
+            controlstarbams.append(starbams[x])
 
     #We have to be either looking for G->T or G->C, if not both
     if not args.use_g_t and not args.use_g_c:
@@ -63,7 +72,12 @@ if __name__ == '__main__':
         sys.exit()
     
     #Make vcf file for snps
-    if args.useSNPs:
+    if args.snpfile:
+        snps = recordSNPs(args.snpfile)
+    if args.useSNPs and not args.snpfile and not args.controlsamples:
+        print('ERROR: If we want to consider snps we either have to give control samples for finding snps or a vcf file of snps we already know!')
+        sys.exit()
+    if args.useSNPs and not args.snpfile:
         if not os.path.exists('snps'):
             os.mkdir('snps')
         vcfFileNames = getSNPs(controlstarbams, args.genomeFasta, args.SNPcoverage, args.SNPfreq)
@@ -79,7 +93,7 @@ if __name__ == '__main__':
         os.rename('vcfconcat.log', os.path.join('snps', 'vcfconcat.log'))
         snps = recordSNPs(os.path.join('snps', 'merged.vcf'))
     
-    elif not args.useSNPs:
+    elif not args.useSNPs and not args.snpfile:
         snps = None
 
     #Get positions to manually mask if given
@@ -92,8 +106,13 @@ if __name__ == '__main__':
     #For each sample, identify conversions, assign conversions to transcripts,
     #and collapse transcript-level measurements to gene-level measurements.
     for ind, sample in enumerate(samplenames):
+        #Create paramter dictionary that is unique to this sample
+        sampleparams = suppliedargs
+        sampleparams['sample'] = sample
+
         print('Running PIGPEN for {0}...'.format(sample))
         starbam = starbams[ind]
+        sampleparams['starbam'] = os.path.abspath(starbam)
         if args.nproc == 1:
             convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, snps, maskpositions, 'high')
         elif args.nproc > 1:
@@ -101,17 +120,21 @@ if __name__ == '__main__':
 
         print('Getting posterior probabilities from salmon alignment file...')
         postmasterbam = postmasterbams[ind]
+        sampleparams['postmasterbam'] = os.path.abspath(postmasterbam)
         pprobs = getpostmasterassignments(postmasterbam)
         print('Assinging conversions to transcripts...')
         txconvs = assigntotxs(pprobs, convs)
         print('Collapsing transcript level conversion counts to gene level...')
-        tx2gene, geneconvs = collapsetogene(txconvs, args.gff)
+        tx2gene, geneid2genename, geneconvs = collapsetogene(txconvs, args.gff)
         print('Counting number of reads assigned to each gene...')
         salmonquant = salmonquants[ind]
+        sampleparams['salmonquant'] = os.path.abspath(salmonquant)
         genecounts = readspergene(salmonquant, tx2gene)
         print('Writing output...')
-        outputfile = sample + '.pigpen.txt'
-        writeOutput(geneconvs, genecounts, outputfile, args.use_g_t, args.use_g_c)
+        if not os.path.exists(args.outputDir):
+            os.mkdir(args.outputDir)
+        outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
+        writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outputfile, args.use_g_t, args.use_g_c)
         print('Done!')
 
 
