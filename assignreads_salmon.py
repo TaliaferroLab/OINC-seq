@@ -57,7 +57,10 @@ def assigntotxs(pprobs, convs):
             pprob = pprobs[readid][txid]
             for conv in readconvs:
                 scaledconv = readconvs[conv] * pprob
-                txconvs[txid][conv] = scaledconv
+                if conv not in txconvs[txid]:
+                    txconvs[txid][conv] = scaledconv
+                else:
+                    txconvs[txid][conv] += scaledconv
 
     readswithtxs = len(convs) - readswithoutassignment
     pct = round(readswithtxs / len(convs), 2) * 100
