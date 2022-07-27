@@ -137,7 +137,7 @@ def readspergene(quantsf, tx2gene):
             line = line.strip().split('\t')
             if line[0] == 'Name':
                 continue
-            txid = line[0]
+            txid = line[0].split('.')[0] #remove tx id version in the salmon quant.sf if it exists
             counts = float(line[4])
             txcounts[txid] = counts
 
@@ -146,7 +146,12 @@ def readspergene(quantsf, tx2gene):
         genecounts[gene] = 0
 
     for txid in txcounts:
-        geneid = tx2gene[txid]
+        try:
+            geneid = tx2gene[txid]
+        except KeyError: #maybe the salmon tx id have version numbers
+            txid = txid.split('.')[0]
+            geneid = tx2gene[txid]
+        
         genecounts[geneid] += txcounts[txid]
 
     return genecounts
