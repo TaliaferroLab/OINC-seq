@@ -23,7 +23,7 @@ def getpostmasterassignments(postmasterbam):
             if read.is_read2:
                 continue
             readid = read.query_name
-            tx = read.reference_name
+            tx = read.reference_name.split('.')[0]
             pprob = read.get_tag(tag='ZW')
             if readid not in pprobs:
                 pprobs[readid] = {}
@@ -52,6 +52,7 @@ def assigntotxs(pprobs, convs):
             continue
 
         for txid in pprobs[readid]:
+            txid = txid.split('.')[0]
             if txid not in txconvs:
                 txconvs[txid] = {}
             pprob = pprobs[readid][txid]
