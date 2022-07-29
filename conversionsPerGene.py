@@ -51,7 +51,7 @@ def getPerGene(convs, reads2gene):
 
     return numreadspergene, convsPerGene
 
-def writeConvsPerGene(numreadspergene, convsPerGene, outfile, use_g_t, use_g_c):
+def writeConvsPerGene(sampleparams, numreadspergene, convsPerGene, outfile, use_g_t, use_g_c):
     possibleconvs = [
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
         'g_a', 'g_t', 'g_c', 'g_g', 'g_n',
@@ -59,6 +59,9 @@ def writeConvsPerGene(numreadspergene, convsPerGene, outfile, use_g_t, use_g_c):
         't_a', 't_t', 't_c', 't_g', 't_n']
 
     with open(outfile, 'w') as outfh:
+        #Write arguments for this pigpen run
+        for arg in sampleparams:
+            outfh.write('#' + arg + '\t' + str(sampleparams[arg]) + '\n')
         #total G is number of ref Gs encountered
         #convG is g_t + g_c (the ones we are interested in)
         outfh.write(('\t').join(['Gene', 'numreads'] + possibleconvs + ['totalG', 'convG', 'convGrate', 'G_Trate', 'G_Crate', 'porc']) + '\n')

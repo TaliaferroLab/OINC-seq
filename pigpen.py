@@ -9,6 +9,8 @@ from snps import getSNPs, recordSNPs
 from maskpositions import readmaskbed
 from getmismatches import iteratereads_pairedend, getmismatches
 from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+from assignreads import getReadOverlaps, processOverlaps
+from conversionsPerGene import getPerGene, writeConvsPerGene
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
@@ -20,6 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--useSNPs', action = 'store_true', help = 'Consider SNPs?')
     parser.add_argument('--snpfile', type = str, help = 'VCF file of snps to mask. If --useSNPs but a --snpfile is not supplied, a VCF of snps will be created using --controlsamples.')
     parser.add_argument('--maskbed', help = 'Optional. Bed file of positions to mask from analysis.', default = None)
+    parser.add_argument('--ROIbed', help = 'Optional. Bed file of specific regions of interest in which to quantify conversions. If supplied, only conversions in these regions will be quantified.', default = None)
     parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
     parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.2', default = 0.2)
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
@@ -103,44 +106,74 @@ if __name__ == '__main__':
     elif not args.maskbed:
         maskpositions = None
 
-    #For each sample, identify conversions, assign conversions to transcripts,
+    #If there is no supplied bedfile of regions of interest,
+    #for each sample, identify conversions, assign conversions to transcripts,
     #and collapse transcript-level measurements to gene-level measurements.
-    for ind, sample in enumerate(samplenames):
-        #Create paramter dictionary that is unique to this sample
-        sampleparams = suppliedargs
-        sampleparams['sample'] = sample
+    if not args.ROIbed:
+        for ind, sample in enumerate(samplenames):
+            #Create parameter dictionary that is unique to this sample
+            sampleparams = suppliedargs
+            sampleparams['sample'] = sample
 
-        print('Running PIGPEN for {0}...'.format(sample))
-        starbam = starbams[ind]
-        sampleparams['starbam'] = os.path.abspath(starbam)
-        if args.nproc == 1:
-            convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, snps, maskpositions, 'high')
-        elif args.nproc > 1:
-            convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+            print('Running PIGPEN for {0}...'.format(sample))
+            starbam = starbams[ind]
+            sampleparams['starbam'] = os.path.abspath(starbam)
+            if args.nproc == 1:
+                convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, snps, maskpositions, 'high')
+            elif args.nproc > 1:
+                convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
-        print('Getting posterior probabilities from salmon alignment file...')
-        postmasterbam = postmasterbams[ind]
-        sampleparams['postmasterbam'] = os.path.abspath(postmasterbam)
-        pprobs = getpostmasterassignments(postmasterbam)
-        print('Assinging conversions to transcripts...')
-        txconvs = assigntotxs(pprobs, convs)
-        print('Collapsing transcript level conversion counts to gene level...')
-        tx2gene, geneid2genename, geneconvs = collapsetogene(txconvs, args.gff)
-        print('Counting number of reads assigned to each gene...')
-        salmonquant = salmonquants[ind]
-        sampleparams['salmonquant'] = os.path.abspath(salmonquant)
-        genecounts = readspergene(salmonquant, tx2gene)
-        print('Writing output...')
-        if not os.path.exists(args.outputDir):
-            os.mkdir(args.outputDir)
-        outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
-        writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outputfile, args.use_g_t, args.use_g_c)
-        print('Done!')
+            print('Getting posterior probabilities from salmon alignment file...')
+            postmasterbam = postmasterbams[ind]
+            sampleparams['postmasterbam'] = os.path.abspath(postmasterbam)
+            pprobs = getpostmasterassignments(postmasterbam)
+            print('Assinging conversions to transcripts...')
+            txconvs = assigntotxs(pprobs, convs)
+            print('Collapsing transcript level conversion counts to gene level...')
+            tx2gene, geneid2genename, geneconvs = collapsetogene(txconvs, args.gff)
+            print('Counting number of reads assigned to each gene...')
+            salmonquant = salmonquants[ind]
+            sampleparams['salmonquant'] = os.path.abspath(salmonquant)
+            genecounts = readspergene(salmonquant, tx2gene)
+            print('Writing output...')
+            if not os.path.exists(args.outputDir):
+                os.mkdir(args.outputDir)
+            outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
+            writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outputfile, args.use_g_t, args.use_g_c)
+            print('Done!')
 
+    #If there is a bed file of regions of interest supplied, then use that. Don't use the salmon/postmaster quantifications.
+    elif args.ROIbed:
+        #Make fasta index
+        command = ['samtools', 'faidx', args.genomeFasta]
+        subprocess.call(command)
+        faidx = args.genomeFasta + '.fai'
 
+        #Create chrsort
+        command = ['cut', '-f' '1,2', faidx]
+        with open('chrsort.txt', 'w') as outfh:
+            subprocess.run(command, stdout = outfh)
 
+        for ind, sample in enumerate(samplenames):
+            #Create parameter dictionary that is unique to this sample
+            sampleparams = suppliedargs
+            sampleparams['sample'] = sample
 
+            print('Running PIGPEN for {0}...'.format(sample))
+            starbam = starbams[ind]
+            sampleparams['starbam'] = os.path.abspath(starbam)
+            if args.nproc == 1:
+                convs, readcounter = iteratereads_pairedend(
+                    starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, snps, maskpositions, 'high')
+            elif args.nproc > 1:
+                convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions,
+                                      args.nConv, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
-
-        
-
+            print('Assigning reads to genes in supplied bed file...')
+            overlaps, numpairs = getReadOverlaps(starbam, args.ROIbed, 'chrsort.txt')
+            read2gene = processOverlaps(overlaps, numpairs)
+            numreadspergene, convsPerGene = getPerGene(convs, read2gene)
+            if not os.path.exists(args.outputDir):
+                os.mkdir(args.outputDir)
+            outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
+            writeConvsPerGene(sampleparams, numreadspergene, convsPerGene, outputfile, args.use_g_t, args.use_g_c)
