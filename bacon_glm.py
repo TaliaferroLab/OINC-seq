@@ -36,6 +36,14 @@ def readconditions(samp_conds_file):
     sampconddf = pd.read_csv(samp_conds_file, sep = '\t', index_col = False, header = 0)
 
     return sampconddf
+def count_comments(pigpenfile):
+    count = 0
+    with open(pigpenfile, 'r') as infh:
+        for line in infh:
+            line = line.strip()
+            if line.startswith('#'):
+                count +=1
+        return count
 
 def makePORCdf(samp_conds_file, minreads):
     #Make a dataframe of PORC values for all samples
@@ -54,7 +62,9 @@ def makePORCdf(samp_conds_file, minreads):
                 continue
             pigpenfile = line[0]
             sample = line[1]
-            df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header = 0)
+            skip_count = count_comments(pigpenfile)
+            header_number = skip_count + 1
+            df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header = header_number, skiprows = skip_count)
             dfgenes = df['Gene'].tolist()
             samplecolumn = [sample] * len(dfgenes)
             df = df.assign(sample = samplecolumn)
