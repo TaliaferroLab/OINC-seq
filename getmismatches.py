@@ -176,7 +176,7 @@ def findsnps(controlbams, genomefasta, minCoverage = 20, minVarFreq = 0.02):
     return snps
 
 
-def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, use_read1, use_read2, nConv, snps=None, maskpositions=None, verbosity='high'):
+def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, use_read1, use_read2, nConv, minMappingQual, snps=None, maskpositions=None, verbosity='high'):
     #Iterate over reads in a paired end alignment file.
     #Find nt conversion locations for each read.
     #For locations interrogated by both mates of read pair, conversion must exist in both mates in order to count
@@ -205,7 +205,7 @@ def iteratereads_pairedend(bam, onlyConsiderOverlap, use_g_t, use_g_c, use_read1
 
             #Check mapping quality
             #MapQ is 255 for uniquely aligned reads FOR STAR ONLY
-            if read1.mapping_quality < 255 or read2.mapping_quality < 255:
+            if read1.mapping_quality < minMappingQual or read2.mapping_quality < minMappingQual:
                 continue
 
             readcounter +=1
@@ -615,7 +615,7 @@ def split_bam(bam, nproc):
     return splitbams
 
 
-def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, nproc, use_g_t, use_g_c, use_read1, use_read2):
+def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, minMappingQual, nproc, use_g_t, use_g_c, use_read1, use_read2):
     #Actually run the mismatch code (calling iteratereads_pairedend)
     #use multiprocessing
     #If there's only one processor, easier to use iteratereads_pairedend() directly.
@@ -626,7 +626,7 @@ def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, nproc, u
     argslist = []
     for x in splitbams:
         argslist.append((x, bool(onlyConsiderOverlap), bool(
-            use_g_t), bool(use_g_c), bool(use_read1), bool(use_read2), nConv, snps, maskpositions, 'low'))
+            use_g_t), bool(use_g_c), bool(use_read1), bool(use_read2), nConv, minMappingQual, snps, maskpositions, 'low'))
 
     #items returned from iteratereads_pairedend are in a list, one per process
     totalreadcounter = 0 #number of reads across all the split bams

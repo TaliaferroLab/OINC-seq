@@ -24,12 +24,13 @@ if __name__ == '__main__':
     parser.add_argument('--maskbed', help = 'Optional. Bed file of positions to mask from analysis.', default = None)
     parser.add_argument('--ROIbed', help = 'Optional. Bed file of specific regions of interest in which to quantify conversions. If supplied, only conversions in these regions will be quantified.', default = None)
     parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
-    parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.2', default = 0.2)
+    parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.4', default = 0.4)
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
     parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
     parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
     parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions?')
     parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions?')
+    parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting.')
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for conversions to be counted. Default is 1.', default = 1)
     parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
     args = parser.parse_args()
@@ -119,9 +120,9 @@ if __name__ == '__main__':
             starbam = starbams[ind]
             sampleparams['starbam'] = os.path.abspath(starbam)
             if args.nproc == 1:
-                convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, snps, maskpositions, 'high')
+                convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
             elif args.nproc > 1:
-                convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+                convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Getting posterior probabilities from salmon alignment file...')
             postmasterbam = postmasterbams[ind]
