@@ -54,8 +54,9 @@ def processOverlaps(overlaps, numpairs):
         txs = overlaps[read]
         maxtx = max(txs, key = txs.get)
         overlaplength = txs[maxtx] #can implement minimum overlap here
-        gene = maxtx.split('_')[0]
-        read2gene[read] = gene
+        if overlaplength >= 225:
+            gene = maxtx.split('_')[0]
+            read2gene[read] = gene
 
     frac_readpairs_with_gene = round((len(read2gene) / numpairs) * 100, 2)
     print('Found genes for {0} read pairs ({1}%).'.format(len(read2gene), frac_readpairs_with_gene))
