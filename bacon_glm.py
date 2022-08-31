@@ -21,6 +21,7 @@ from rpy2.rinterface import RRuntimeWarning
 from rpy2.rinterface_lib.callbacks import logger as rpy2_logger
 import logging
 import warnings
+import argparse
 
 #Need r-base, r-stats, r-lme4
 
@@ -36,14 +37,6 @@ def readconditions(samp_conds_file):
     sampconddf = pd.read_csv(samp_conds_file, sep = '\t', index_col = False, header = 0)
 
     return sampconddf
-def count_comments(pigpenfile):
-    count = 0
-    with open(pigpenfile, 'r') as infh:
-        for line in infh:
-            line = line.strip()
-            if line.startswith('#'):
-                count +=1
-        return count
 
 def makePORCdf(samp_conds_file, minreads):
     #Make a dataframe of PORC values for all samples
@@ -62,10 +55,8 @@ def makePORCdf(samp_conds_file, minreads):
                 continue
             pigpenfile = line[0]
             sample = line[1]
-            skip_count = count_comments(pigpenfile)
-            header_number = skip_count + 1
-            df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header = header_number, skiprows = skip_count)
-            dfgenes = df['Gene'].tolist()
+            df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, comment = '#', header = 0)
+            dfgenes = df['GeneID'].tolist()
             samplecolumn = [sample] * len(dfgenes)
             df = df.assign(sample = samplecolumn)
 
@@ -74,7 +65,7 @@ def makePORCdf(samp_conds_file, minreads):
             else:
                 genesinall = genesinall.intersection(set(dfgenes))
             
-            columnstokeep = ['Gene', 'sample', 'numreads', 'porc'] 
+            columnstokeep = ['GeneID', 'GeneName', 'sample', 'numreads', 'porc'] 
             df = df[columnstokeep]
             dfs.append(df)
 
@@ -82,13 +73,13 @@ def makePORCdf(samp_conds_file, minreads):
     #Somehow there are some genes whose name in NA
     if np.nan in genesinall:
         genesinall.remove(np.nan)
-    dfs = [df.loc[df['Gene'].isin(genesinall)] for df in dfs]
+    dfs = [df.loc[df['GeneID'].isin(genesinall)] for df in dfs]
 
     #concatenate (rbind) dfs together
     df = pd.concat(dfs)
     
     #turn from long into wide
-    df = df.pivot_table(index = 'Gene', columns = 'sample', values = ['numreads', 'porc']).reset_index()
+    df = df.pivot_table(index = ['GeneID', 'GeneName'], columns = 'sample', values = ['numreads', 'porc']).reset_index()
     #flatten multiindex column names
     df.columns = ["_".join(a) if '' not in a else a[0] for a in df.columns.to_flat_index()]
     
@@ -103,10 +94,11 @@ def makePORCdf(samp_conds_file, minreads):
     print('{0} genes have at least {1} reads in every sample.'.format(len(df), minreads))
     #We also don't want rows with inf/-inf PORC values
     df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.dropna(how= 'any')
+    df = df.dropna(how = 'any')
     #Return a dataframe of just genes and PORC values
-    columnstokeep = ['Gene'] + [col for col in df.columns if 'porc' in col]
+    columnstokeep = ['GeneID', 'GeneName'] + [col for col in df.columns if 'porc' in col]
     df = df[columnstokeep]
+    print('{0} genes pass read count filter in all files and do not have PORC values of -inf in any file.'.format(len(df)))
 
     return df
 
@@ -251,7 +243,7 @@ def multihyp(pvalues):
     return correctedps
 
 
-def getpvalues(samp_conds_file, conditionA, conditionB):
+def getpvalues(samp_conds_file, conditionA, conditionB, filteredgenes):
     #each contingency table will be: [[convG, nonconvG], [convnonG, nonconvnonG]]
     #These will be stored in a dictionary: {gene : [condAtables, condBtables]}
     conttables = {}
@@ -268,10 +260,13 @@ def getpvalues(samp_conds_file, conditionA, conditionB):
             pigpenfile = line[0]
             sample = line[1]
             condition = line[2]
-            df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header=0)
+            df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header=0, comment = '#')
             for idx, row in df.iterrows():
                 conttable = makeContingencyTable(row)
-                gene = row['Gene']
+                gene = row['GeneID']
+                #If this isn't one of the genes that passes read count filters in all files, skip it
+                if gene not in filteredgenes:
+                    continue
                 if gene not in conttables:
                     conttables[gene] = [[], []]
                 if condition == conditionA:
@@ -302,11 +297,11 @@ def getpvalues(samp_conds_file, conditionA, conditionB):
     pdf = pd.DataFrame.from_dict(pvalues, orient = 'index', columns = ['pval'])
     fdrdf = pd.DataFrame.from_dict(correctedps, orient = 'index', columns = ['FDR'])
     
-    pdf = pd.merge(pdf, fdrdf, left_index = True, right_index = True).reset_index().rename(columns = {'index' : 'Gene'})
+    pdf = pd.merge(pdf, fdrdf, left_index = True, right_index = True).reset_index().rename(columns = {'index' : 'GeneID'})
 
     return pdf
 
-def formatporcDF(porcdf):
+def formatporcdf(porcdf):
     #Format floats in all porcDF columns
     formats = {'deltaPORC': '{:.3f}', 'pval': '{:.3e}', 'FDR': '{:.3e}'}
     c = porcdf.columns.tolist()
@@ -324,15 +319,28 @@ if __name__ == '__main__':
     base = importr('base')
     stats = importr('stats')
 
-    #Make df of PORC values
-    porcdf = makePORCdf(sys.argv[1], 100)
-    #Add delta porc values
-    porcdf = calcDeltaPORC(porcdf, sys.argv[1], 'mDBF', 'pDBF')
-    #Get p values and corrected p values
-    pdf = getpvalues(sys.argv[1], 'mDBF', 'pDBF')
-    #Add p values and FDR
-    porcdf = pd.merge(porcdf, pdf, on = ['Gene'])
-    #Format floats
-    porcdf = formatporcDF(porcdf)
+    parser = argparse.ArgumentParser(description = 'BACON: A framework for analyzing pigpen outputs.')
+    parser.add_argument('--sampconds', type=str,
+                        help='3 column, tab delimited file. Column names must be \'file\', \'sample\', and \'condition\'. See README for more details.')
+    parser.add_argument('--minreads', type = int, help = 'Minimum read count for a gene to be considered in a sample.', default = 100)
+    parser.add_argument('--conditionA', type=str,
+                        help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
+    parser.add_argument('--conditionB', type=str,
+                        help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
+    parser.add_argument('--output', type = str, help = 'Output file.')
+    args = parser.parse_args()
 
-    porcdf.to_csv('porc.txt', sep='\t', index = False)
+    #Make df of PORC values
+    porcdf = makePORCdf(args.sampconds, args.minreads)
+    #Add deltaporc values
+    porcdf = calcDeltaPORC(porcdf, args.sampconds, args.conditionA, args.conditionB)
+    filteredgenes = porcdf['GeneID'].tolist()
+    #Get p values and corrected p values
+    pdf = getpvalues(args.sampconds, args.conditionA, args.conditionB, filteredgenes)
+    #add p values and FDR
+    porcdf = pd.merge(porcdf, pdf, on = ['GeneID'])
+    #Format floats
+    porcdf = formatporcdf(porcdf)
+
+    porcdf.to_csv(args.output, sep = '\t', index = False)
+
