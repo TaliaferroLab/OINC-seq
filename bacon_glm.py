@@ -142,11 +142,16 @@ def calcDeltaPORC(porcdf, sampconds, conditionA, conditionB):
     
     return porcdf
 
-def makeContingencyTable(row):
+def makeContingencyTable(row, use_g_t, use_g_c):
     #Given a row from a pigpen df, return a contingency table of the form
     #[[convG, nonconvG], [convnonG, nonconvnonG]]
 
-    convG = row['g_t'] + row['g_c']
+    if use_g_t and use_g_c:
+        convG = row['g_t'] + row['g_c']
+    elif use_g_t and not use_g_c:
+        convG = row['g_t']
+    elif use_g_c and not use_g_t:
+        convG = row['g_c']
     nonconvG = row['g_g']
     convnonG = row['a_t'] + row['a_c'] + row['a_g'] + row['c_a'] + row['c_t'] + row['c_g'] + row['t_a'] + row['t_c'] + row['t_g']
     nonconvnonG = row['c_c'] + row['t_t'] + row['a_a']
@@ -170,11 +175,11 @@ def calculate_nested_f_statistic(small_model, big_model):
     p_value = stats.f.sf(f_stat, df_numerator, df_denom)
     return (f_stat, p_value)
 
-def getgenep(geneconttable):
+def getgenep(geneconttable, considernonG):
     #Given a gene-level contingency table of the form:
     #[condAtables, condBtables], where each individual sample is of the form
     #[[convG, nonconvG], [convnonG, nonconvnonG]],
-    #run glm either including or excluding condition term
+    #run lme either including or excluding condition term
     #using likelihood ratio of the two models and chisq test, return p value
 
     #Turn gene-level contingency tables into df of form
@@ -202,23 +207,48 @@ def getgenep(geneconttable):
     d = {'cond': cond, 'nuc': nuc, 'conv': conv,
          'counts': counts, 'sample' : samples}
     df = pd.DataFrame.from_dict(d)
-    #Reshape table to get individual columns for converted and nonconverted nts
-    df2 = df.pivot_table(index = ['cond', 'nuc', 'sample'], columns = 'conv', values = 'counts').reset_index()
-
-    pandas2ri.activate()
-
-    fmla = 'cbind(yes, no) ~ nuc + cond + nuc:cond + (1 | sample)'
-    nullfmla = 'cbind(yes, no) ~ nuc + cond + (1 | sample)'
-
-    fullfit = lme4.glmer(formula=fmla, family=stats.binomial, data=df2)
-    reducedfit = lme4.glmer(formula=nullfmla, family=stats.binomial, data=df2)
-
-    logratio = (stats.logLik(fullfit)[0] - stats.logLik(reducedfit)[0]) * 2
-    pvalue = stats.pchisq(logratio, df=2, lower_tail=False)[0]
-    #format decimal
-    pvalue = float('{:.2e}'.format(pvalue))
     
-    return pvalue
+    if considernonG:
+        #Reshape table to get individual columns for converted and nonconverted nts
+        df2 = df.pivot_table(index=['cond', 'nuc', 'sample'],
+                         columns='conv', values='counts').reset_index()
+
+        pandas2ri.activate()
+
+        fmla = 'cbind(yes, no) ~ sample + nuc + cond + nuc:cond'
+        nullfmla = 'cbind(yes, no) ~ sample + nuc'
+
+        fullfit = stats.glm(formula=fmla, family=stats.binomial, data=df2)
+        reducedfit = stats.glm(formula=nullfmla, family=stats.binomial, data=df2)
+
+        logratio = (stats.logLik(fullfit)[0] - stats.logLik(reducedfit)[0]) * 2
+        pvalue = stats.pchisq(logratio, df=2, lower_tail=False)[0]
+        #format decimal
+        pvalue = float('{:.2e}'.format(pvalue))
+
+        return pvalue
+
+    elif not considernonG:
+        #Remove rows in which nuc == nonG
+        df = df[df.nuc == 'G']
+
+        #Reshape table to get individual columns for converted and nonconverted nts
+        df2 = df.pivot_table(index=['cond', 'nuc', 'sample'],
+                             columns='conv', values='counts').reset_index()
+
+        pandas2ri.activate()
+        fmla = 'cbind(yes, no) ~ cond'
+        nullfmla = 'cbind(yes, no) ~ 1'
+
+        fullfit = stats.glm(formula=fmla, family=stats.binomial, data=df2)
+        reducedfit = stats.glm(formula=nullfmla, family=stats.binomial, data=df2)
+
+        logratio = (stats.logLik(fullfit)[0] - stats.logLik(reducedfit)[0]) * 2
+        pvalue = stats.pchisq(logratio, df=1, lower_tail=False)[0]
+        #format decimal
+        pvalue = float('{:.2e}'.format(pvalue))
+
+        return pvalue
 
 def multihyp(pvalues):
     #given a dictionary of {gene : pvalue}, perform multiple hypothesis correction
@@ -243,7 +273,7 @@ def multihyp(pvalues):
     return correctedps
 
 
-def getpvalues(samp_conds_file, conditionA, conditionB, filteredgenes):
+def getpvalues(samp_conds_file, conditionA, conditionB, considernonG, filteredgenes, use_g_t, use_g_c):
     #each contingency table will be: [[convG, nonconvG], [convnonG, nonconvnonG]]
     #These will be stored in a dictionary: {gene : [condAtables, condBtables]}
     conttables = {}
@@ -262,7 +292,7 @@ def getpvalues(samp_conds_file, conditionA, conditionB, filteredgenes):
             condition = line[2]
             df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header=0, comment = '#')
             for idx, row in df.iterrows():
-                conttable = makeContingencyTable(row)
+                conttable = makeContingencyTable(row, use_g_t, use_g_c)
                 gene = row['GeneID']
                 #If this isn't one of the genes that passes read count filters in all files, skip it
                 if gene not in filteredgenes:
@@ -284,7 +314,7 @@ def getpvalues(samp_conds_file, conditionA, conditionB, filteredgenes):
         gene_porcfiles = len(geneconttable[0]) + len(geneconttable[1])
         if nsamples == gene_porcfiles:
             try:
-                p = getgenep(geneconttable)
+                p = getgenep(geneconttable, considernonG)
             except RRuntimeError:
                 p = np.nan
         else:
@@ -327,8 +357,16 @@ if __name__ == '__main__':
                         help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
     parser.add_argument('--conditionB', type=str,
                         help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
+    parser.add_argument('--use_g_t', help = 'Consider G to T mutations when calculating G conversion rate?', action = 'store_true')
+    parser.add_argument('--use_g_c', help = 'Consider G to C mutations when calculating G conversion rate?', action = 'store_true')
+    parser.add_argument('--considernonG',
+                        help='Consider conversions of nonG residues to normalize for overall mutation rate?', action = 'store_true')
     parser.add_argument('--output', type = str, help = 'Output file.')
     args = parser.parse_args()
+
+    if not args.use_g_t and not args.use_g_c:
+        print('ERROR: we must either count G to T or G to C mutations (or both). Supply --use_g_t or --use_g_c or both.')
+        sys.exit()
 
     #Make df of PORC values
     porcdf = makePORCdf(args.sampconds, args.minreads)
@@ -336,7 +374,7 @@ if __name__ == '__main__':
     porcdf = calcDeltaPORC(porcdf, args.sampconds, args.conditionA, args.conditionB)
     filteredgenes = porcdf['GeneID'].tolist()
     #Get p values and corrected p values
-    pdf = getpvalues(args.sampconds, args.conditionA, args.conditionB, filteredgenes)
+    pdf = getpvalues(args.sampconds, args.conditionA, args.conditionB, args.considernonG, filteredgenes, args.use_g_t, args.use_g_c)
     #add p values and FDR
     porcdf = pd.merge(porcdf, pdf, on = ['GeneID'])
     #Format floats
