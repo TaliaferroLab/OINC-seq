@@ -143,6 +143,8 @@ def calcDeltaPORC(porcdf, sampconds, conditionA, conditionB, metric):
         deltametric = condBmetric - condAmetric #remember that porc is logged, but the raw conversion rates are not
         if metric == 'porc':
             deltametric = float(format(deltametric, '.3f'))
+        else:
+            deltametric = '{:.3e}'.format(deltametric)
         deltametrics.append(deltametric)
         
     if metric == 'porc':
