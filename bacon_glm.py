@@ -38,7 +38,7 @@ def readconditions(samp_conds_file):
 
     return sampconddf
 
-def makePORCdf(samp_conds_file, minreads):
+def makePORCdf(samp_conds_file, minreads, considernonG):
     #Make a dataframe of PORC values for all samples
     #start with GENE...SAMPLE...READCOUNT...PORC
     #then make a wide version that is GENE...SAMPLE1READCOUNT...SAMPLE1PORC...SAMPLE2READCOUNT...SAMPLE2PORC
@@ -65,7 +65,7 @@ def makePORCdf(samp_conds_file, minreads):
             else:
                 genesinall = genesinall.intersection(set(dfgenes))
             
-            columnstokeep = ['GeneID', 'GeneName', 'sample', 'numreads', 'porc'] 
+            columnstokeep = ['GeneID', 'GeneName', 'sample', 'numreads', 'G_Trate', 'G_Crate', 'convGrate', 'porc'] 
             df = df[columnstokeep]
             dfs.append(df)
 
@@ -79,7 +79,8 @@ def makePORCdf(samp_conds_file, minreads):
     df = pd.concat(dfs)
     
     #turn from long into wide
-    df = df.pivot_table(index = ['GeneID', 'GeneName'], columns = 'sample', values = ['numreads', 'porc']).reset_index()
+    df = df.pivot_table(index=['GeneID', 'GeneName'], columns='sample', values=[
+                        'numreads', 'G_Trate', 'G_Crate', 'convGrate', 'porc']).reset_index()
     #flatten multiindex column names
     df.columns = ["_".join(a) if '' not in a else a[0] for a in df.columns.to_flat_index()]
     
@@ -93,53 +94,70 @@ def makePORCdf(samp_conds_file, minreads):
     df = df.loc[df['minreadcount'] >= minreads]
     print('{0} genes have at least {1} reads in every sample.'.format(len(df), minreads))
     #We also don't want rows with inf/-inf PORC values
-    df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.dropna(how = 'any')
-    #Return a dataframe of just genes and PORC values
-    columnstokeep = ['GeneID', 'GeneName'] + [col for col in df.columns if 'porc' in col]
+    #This is true only if we are using porc values, otherwise we can keep them
+    if considernonG:
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how = 'any')
+    #Return a dataframe of just genes and relevant values
+    columnstokeep = ['GeneID', 'GeneName'] + [col for col in df.columns if 'rate' in col] + [col for col in df.columns if 'porc' in col]
     df = df[columnstokeep]
-    print('{0} genes pass read count filter in all files and do not have PORC values of -inf in any file.'.format(len(df)))
+    print('{0} genes pass read count filter in all files.'.format(len(df)))
 
     return df
 
-def calcDeltaPORC(porcdf, sampconds, conditionA, conditionB):
-    #Given a porc df from makePORCdf, add deltaporc values.
+def calcDeltaPORC(porcdf, sampconds, conditionA, conditionB, metric):
+    #Given a porc df from makePORCdf, add delta metric values.
+    #Metric depends on whether we are considering nonG conversions (if so, metric = porc)
+    #and on what conversion we are considering (g_t, g_c, or if both, metric = convGrate)
 
-    deltaporcs = []
+    deltametrics = []
     sampconddf = readconditions(sampconds)
 
     #Get column names in porcdf that are associated with each condition
     conditionAsamps = sampconddf.loc[sampconddf['condition'] == conditionA]
     conditionAsamps = conditionAsamps['sample'].tolist()
-    conditionAcolumns = ['porc_' + samp for samp in conditionAsamps]
+    conditionAcolumns = [metric + '_' + samp for samp in conditionAsamps]
 
     conditionBsamps = sampconddf.loc[sampconddf['condition'] == conditionB]
     conditionBsamps = conditionBsamps['sample'].tolist()
-    conditionBcolumns = ['porc_' + samp for samp in conditionBsamps]
+    conditionBcolumns = [metric + '_' + samp for samp in conditionBsamps]
 
     print('Condition A samples: ' + (', ').join(conditionAsamps))
     print('Condition B samples: ' + (', ').join(conditionBsamps))
 
     for index, row in porcdf.iterrows():
-        condAporcs = []
-        condBporcs = []
+        condAmetrics = []
+        condBmetrics = []
         for col in conditionAcolumns:
-            porc = row[col]
-            condAporcs.append(porc)
+            value = row[col]
+            condAmetrics.append(value)
         for col in conditionBcolumns:
-            porc = row[col]
-            condBporcs.append(porc)
+            value = row[col]
+            condBmetrics.append(value)
 
-        condAporcs = [x for x in condAporcs if x != np.nan]
-        condBporcs = [x for x in condBporcs if x != np.nan]
-        condAporc = np.mean(condAporcs)
-        condBporc = np.mean(condBporcs)
-        deltaporc = condBporc - condAporc
-        deltaporc = float(format(deltaporc, '.3f'))
-        deltaporcs.append(deltaporc)
+        condAmetrics = [x for x in condAmetrics if x != np.nan]
+        condBmetrics = [x for x in condBmetrics if x != np.nan]
+        condAmetric = np.mean(condAmetrics)
+        condBmetric = np.mean(condBmetrics)
 
-    porcdf = porcdf.assign(deltaPORC = deltaporcs)
-    
+        deltametric = condBmetric - condAmetric #remember that porc is logged, but the raw conversion rates are not
+        if metric == 'porc':
+            deltametric = float(format(deltametric, '.3f'))
+        deltametrics.append(deltametric)
+        
+    if metric == 'porc':
+        porcdf = porcdf.assign(delta_porc = deltametrics)
+    elif metric == 'G_Trate':
+        porcdf = porcdf.assign(delta_G_Trate = deltametrics)
+    elif metric == 'G_Crate':
+        porcdf = porcdf.assign(delta_G_Crate = deltametrics)
+    elif metric == 'convGrate':
+        porcdf = porcdf.assign(delta_convGrate = deltametrics)
+
+    #Only take same columns
+    columnstokeep = ['GeneID', 'GeneName'] + [col for col in porcdf.columns if metric in col]
+    porcdf = porcdf[columnstokeep]
+
     return porcdf
 
 def makeContingencyTable(row, use_g_t, use_g_c):
@@ -333,11 +351,11 @@ def getpvalues(samp_conds_file, conditionA, conditionB, considernonG, filteredge
 
 def formatporcdf(porcdf):
     #Format floats in all porcDF columns
-    formats = {'deltaPORC': '{:.3f}', 'pval': '{:.3e}', 'FDR': '{:.3e}'}
-    c = porcdf.columns.tolist()
-    c = [x for x in c if 'porc_' in x]
-    for x in c:
-        formats[x] = '{:.3f}' #all porc_SAMPLE columns
+    formats = {'pval': '{:.3e}', 'FDR': '{:.3e}'}
+    #c = porcdf.columns.tolist()
+    #c = [x for x in c if 'porc_' in x]
+    #for x in c:
+    #    formats[x] = '{:.3f}' #all porc_SAMPLE columns
     for col, f in formats.items():
         porcdf[col] = porcdf[col].map(lambda x: f.format(x))
 
@@ -364,14 +382,26 @@ if __name__ == '__main__':
     parser.add_argument('--output', type = str, help = 'Output file.')
     args = parser.parse_args()
 
-    if not args.use_g_t and not args.use_g_c:
-        print('ERROR: we must either count G to T or G to C mutations (or both). Supply --use_g_t or --use_g_c or both.')
+    #Considering nonG conversions uses porc values in which both g_t and g_c conversions have already been included
+    if not args.use_g_t and not args.use_g_c and not args.considernonG:
+        print('ERROR: we must either count G to T or G to C mutations (or both) or consider nonG conversions.')
         sys.exit()
 
+    #What metric should we care about?
+    if args.considernonG:
+        metric == 'porc'
+    elif args.use_g_t and not args.use_g_c:
+        metric = 'G_Trate'
+    elif args.use_g_c and not args.use_g_t:
+        metric = 'G_Crate'
+    elif args.use_g_t and args.use_g_c:
+        metric = 'convGrate'
+    
+    
     #Make df of PORC values
-    porcdf = makePORCdf(args.sampconds, args.minreads)
+    porcdf = makePORCdf(args.sampconds, args.minreads, args.considernonG)
     #Add deltaporc values
-    porcdf = calcDeltaPORC(porcdf, args.sampconds, args.conditionA, args.conditionB)
+    porcdf = calcDeltaPORC(porcdf, args.sampconds, args.conditionA, args.conditionB, metric)
     filteredgenes = porcdf['GeneID'].tolist()
     #Get p values and corrected p values
     pdf = getpvalues(args.sampconds, args.conditionA, args.conditionB, args.considernonG, filteredgenes, args.use_g_t, args.use_g_c)
