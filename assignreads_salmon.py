@@ -40,6 +40,7 @@ def assigntotxs(pprobs, convs):
     #convs = #{readid : {a_a : 200, a_t : 1, etc.}}
     print('Finding transcript assignments for {0} reads.'.format(len(convs)))
     readswithoutassignment = 0 #number of reads which exist in convs but not in pprobs (i.e. weren't assigned to a transcript by salmon)
+    assignedreads = 0 #number of reads in convs for which we found a match in pprobs
 
     txconvs = {}  # {txid : {a_a : 200, a_t : 1, etc.}}
 
@@ -47,6 +48,7 @@ def assigntotxs(pprobs, convs):
 
         try:
             readconvs = convs[readid]
+            assignedreads +=1
         except KeyError: #we couldn't find this read in convs
             readswithoutassignment +=1
             continue
@@ -64,6 +66,7 @@ def assigntotxs(pprobs, convs):
                     txconvs[txid][conv] += scaledconv
 
     readswithtxs = len(convs) - readswithoutassignment
+    readswithtxs = assignedreads
     pct = round(readswithtxs / len(convs), 2) * 100
     print('Found transcripts for {0} of {1} reads ({2}%).'.format(readswithtxs, len(convs), pct))
 

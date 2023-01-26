@@ -16,6 +16,8 @@ import argparse
 #Reads are then quantified using salmon, where a separate transcriptome-oriented bam is written.
 #Postmaster then takes this bam and adds posterior probabilities for transcript assignments.
 
+#alignAndQuant.py only gives uniquely aligned reads to salmon. alignAndQuant2.py gives all reads to salmon.
+
 #When runSTAR(), bamtofastq(), runSalmon(), and runPostmaster() are run in succession, the output is a directory called <samplename>. 
 #In this directory, the STAR output is <samplename>Aligned.sortedByCoord.out.bam in STAR/,
 #the salmon output is <samplename>.quant.sf and <samplename>.salmon.bam in salmon/,
@@ -84,7 +86,6 @@ def bamtofastq(samplename, nthreads):
 
 
 def runSalmon(reads1, reads2, nthreads, salmonindex, samplename):
-    #Take in those uniquely aligning reads and quantify transcript abundance with them using salmon.
 
     if not os.path.exists('salmon'):
         os.mkdir('salmon')
