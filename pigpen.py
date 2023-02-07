@@ -54,17 +54,17 @@ if __name__ == '__main__':
     if args.controlsamples:
         controlsamples = args.controlsamples.split(',')
         controlindicies = []
-        for ind, x in enumerate(samplenames):
-            if x in controlsamples:
-                controlindicies.append(ind)
-
-        controlsamplebams = []
-        if args.dedupUMI:
-            for x in controlindicies:
-                controlsamplebams.append(dedupbams[x])
+    samplebams = []
+    controlsamplebams = []
+    for ind, x in enumerate(samplenames):
+        if args.dedupUMI:  
+            samplebams.append(dedupbams[ind])
+            if args.controlsamples and x in controlsamples:
+                controlsamplebams.append(dedupbams[ind])
         else:
-            for x in controlindicies:
-                controlsamplebams.append(starbams[x])
+            samplebams.append(starbams[ind])
+            if args.controlsamples and x in controlsamples:
+                controlsamplebams.append(starbams[ind])
 
     #We have to be either looking for G->T or G->C, if not both
     if not args.use_g_t and not args.use_g_c:
@@ -123,20 +123,13 @@ if __name__ == '__main__':
             sampleparams['sample'] = sample
 
             print('Running PIGPEN for {0}...'.format(sample))
-            if args.dedupUMI:
-                dedupbam = dedupbams[ind]
-                sampleparams['dedupbam'] = os.path.abspath(dedupbam)
-                if args.nproc == 1:
-                    convs, readcounter = iteratereads_pairedend(dedupbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
-                elif args.nproc > 1:
-                    convs = getmismatches(dedupbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
-            else:
-                starbam = starbams[ind]
-                sampleparams['starbam'] = os.path.abspath(starbam)
-                if args.nproc == 1:
-                    convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
-                elif args.nproc > 1:
-                    convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+
+            samplebam = samplebams[ind]
+            sampleparams['samplebam'] = os.path.abspath(samplebam)
+            if args.nproc == 1:
+                convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+            elif args.nproc > 1:
+                convs = getmismatches(samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Getting posterior probabilities from salmon alignment file...')
             postmasterbam = postmasterbams[ind]
@@ -175,27 +168,18 @@ if __name__ == '__main__':
             sampleparams['sample'] = sample
 
             print('Running PIGPEN for {0}...'.format(sample))
-            if args.dedupUMI:
-                dedupbam = dedupbams[ind]
-                sampleparams['dedupbam'] = os.path.abspath(starbam)
-                if args.nproc == 1:
-                    convs, readcounter = iteratereads_pairedend(
-                        dedupbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
-                elif args.nproc > 1:
-                    convs = getmismatches(dedupbam, args.onlyConsiderOverlap, snps, maskpositions,
-                                          args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
-            else:
-                starbam = starbams[ind]
-                sampleparams['starbam'] = os.path.abspath(starbam)
-                if args.nproc == 1:
-                    convs, readcounter = iteratereads_pairedend(
-                        starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
-                elif args.nproc > 1:
-                    convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions,
-                                          args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+
+            samplebam = samplebam[ind]
+            sampleparams['samplebam'] = os.path.abspath(samplebam)
+            if args.nproc == 1:
+                convs, readcounter = iteratereads_pairedend(
+                    samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+            elif args.nproc > 1:
+                convs = getmismatches(samplebam, args.onlyConsiderOverlap, snps, maskpositions,
+                                      args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Assigning reads to genes in supplied bed file...')
-            overlaps, numpairs = getReadOverlaps(starbam, args.ROIbed, 'chrsort.txt')
+            overlaps, numpairs = getReadOverlaps(samplebam, args.ROIbed, 'chrsort.txt')
             read2gene = processOverlaps(overlaps, numpairs)
             numreadspergene, convsPerGene = getPerGene(convs, read2gene)
             if not os.path.exists(args.outputDir):
