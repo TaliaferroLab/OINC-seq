@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting. STAR unique mappers have MAPQ 255.', required = True)
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for conversions to be counted. Default is 1.', default = 1)
     parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
+    parser.add_argument('--dedupUMI', action = 'store_true', help = 'Deduplicate UMIs? requires UMI extract.')
     args = parser.parse_args()
 
     #Store command line arguments
@@ -46,19 +47,24 @@ if __name__ == '__main__':
     samplenames = args.samplenames.split(',')
     salmonquants = [os.path.join(x, 'salmon', '{0}.quant.sf'.format(x)) for x in samplenames]
     starbams = [os.path.join(x, 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(x)) for x in samplenames]
+    dedupbams = [os.path.join(x, 'STAR', '{0}.dedup.bam'.format(x)) for x in samplenames]
     postmasterbams = [os.path.join(x, 'postmaster', '{0}.postmaster.bam'.format(x)) for x in samplenames]
 
     #Take in list of control samples, make list of their corresponding star bams for SNP calling
     if args.controlsamples:
         controlsamples = args.controlsamples.split(',')
         controlindicies = []
-        for ind, x in enumerate(samplenames):
-            if x in controlsamples:
-                controlindicies.append(ind)
-
-        controlstarbams = []
-        for x in controlindicies:
-            controlstarbams.append(starbams[x])
+    samplebams = []
+    controlsamplebams = []
+    for ind, x in enumerate(samplenames):
+        if args.dedupUMI:
+            samplebams.append(dedupbams[ind])
+            if args.controlsamples and x in controlsamples:
+                controlsamplebams.append(dedupbams[ind])
+        else:
+            samplebams.append(starbams[ind])
+            if args.controlsamples and x in controlsamples:
+                controlsamplebams.append(starbams[ind])
 
     #We have to be either looking for G->T or G->C, if not both
     if not args.use_g_t and not args.use_g_c:
@@ -74,7 +80,7 @@ if __name__ == '__main__':
     if args.onlyConsiderOverlap and (not args.use_read1 or not args.use_read2):
         print('If we are only going to consider overlap between paired reads, we must use both read1 and read2.')
         sys.exit()
-    
+
     #Make vcf file for snps
     if args.snpfile:
         snps = recordSNPs(args.snpfile)
@@ -84,7 +90,7 @@ if __name__ == '__main__':
     if args.useSNPs and not args.snpfile:
         if not os.path.exists('snps'):
             os.mkdir('snps')
-        vcfFileNames = getSNPs(controlstarbams, args.genomeFasta, args.SNPcoverage, args.SNPfreq)
+        vcfFileNames = getSNPs(controlsamplebams, args.genomeFasta, args.SNPcoverage, args.SNPfreq)
         for f in vcfFileNames:
             csi = f + '.csi'
             log = f[:-3] + '.log'
@@ -96,7 +102,7 @@ if __name__ == '__main__':
         os.rename('merged.vcf', os.path.join('snps', 'merged.vcf'))
         os.rename('vcfconcat.log', os.path.join('snps', 'vcfconcat.log'))
         snps = recordSNPs(os.path.join('snps', 'merged.vcf'))
-    
+
     elif not args.useSNPs and not args.snpfile:
         snps = None
 
@@ -117,12 +123,13 @@ if __name__ == '__main__':
             sampleparams['sample'] = sample
 
             print('Running PIGPEN for {0}...'.format(sample))
-            starbam = starbams[ind]
-            sampleparams['starbam'] = os.path.abspath(starbam)
+
+            samplebam = samplebams[ind]
+            sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
-                convs, readcounter = iteratereads_pairedend(starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
             elif args.nproc > 1:
-                convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+                convs = getmismatches(samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Getting posterior probabilities from salmon alignment file...')
             postmasterbam = postmasterbams[ind]
@@ -161,17 +168,18 @@ if __name__ == '__main__':
             sampleparams['sample'] = sample
 
             print('Running PIGPEN for {0}...'.format(sample))
-            starbam = starbams[ind]
-            sampleparams['starbam'] = os.path.abspath(starbam)
+
+            samplebam = samplebams[ind]
+            sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
                 convs, readcounter = iteratereads_pairedend(
-                    starbam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                    samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
             elif args.nproc > 1:
-                convs = getmismatches(starbam, args.onlyConsiderOverlap, snps, maskpositions,
+                convs = getmismatches(samplebam, args.onlyConsiderOverlap, snps, maskpositions,
                                       args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Assigning reads to genes in supplied bed file...')
-            overlaps, numpairs = getReadOverlaps(starbam, args.ROIbed, 'chrsort.txt')
+            overlaps, numpairs = getReadOverlaps(samplebam, args.ROIbed, 'chrsort.txt')
             read2gene = processOverlaps(overlaps, numpairs)
             numreadspergene, convsPerGene = getPerGene(convs, read2gene)
             if not os.path.exists(args.outputDir):
