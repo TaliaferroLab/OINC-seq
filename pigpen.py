@@ -57,7 +57,7 @@ if __name__ == '__main__':
     samplebams = []
     controlsamplebams = []
     for ind, x in enumerate(samplenames):
-        if args.dedupUMI:  
+        if args.dedupUMI:
             samplebams.append(dedupbams[ind])
             if args.controlsamples and x in controlsamples:
                 controlsamplebams.append(dedupbams[ind])
@@ -169,7 +169,7 @@ if __name__ == '__main__':
 
             print('Running PIGPEN for {0}...'.format(sample))
 
-            samplebam = samplebam[ind]
+            samplebam = samplebams[ind]
             sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
                 convs, readcounter = iteratereads_pairedend(

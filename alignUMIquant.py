@@ -62,8 +62,12 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
 def runDedup(samplename, nthreads):
     STARbam = os.path.join(os.getcwd(), 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(samplename))
     dedupbam = os.path.join(os.getcwd(), 'STAR', '{0}.dedup.bam'.format(samplename))
-    command = ['umi_tools', 'dedup', '-I', STARbam, '--paired', ' --output-stats=deduplicated', '-S', dedupbam]
-
+    if args.libType == "LEXO":
+        command = ['umi_tools', 'dedup', '-I', STARbam, '--paired', '-S', dedupbam]
+    elif args.libType == "SA":
+        command = ['umi_tools', 'dedup', '-I', STARbam, '--paired', '--method=unique', '-S', dedupbam]
+    else:
+        print('LibType must be either "LEXO" or "SA".')
     print('Running deduplication for {0}...'.format(samplename))
 
     subprocess.run(command)
@@ -189,12 +193,12 @@ if __name__ == '__main__':
     parser.add_argument('--salmonindex', type = str, help = 'Salmon index directory.')
     parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.')
     parser.add_argument('--dedupUMI', action = 'store_true', help = 'Deduplicate UMIs? requires UMI extract.')
+    parser.add_argument('--libType', type = str, help = 'Library Type, either "LEXO" or "SA"')
     args = parser.parse_args()
 
     r1 = os.path.abspath(args.forwardreads)
     r2 = os.path.abspath(args.reversereads)
     STARindex = os.path.abspath(args.STARindex)
-    salmonindex = os.path.abspath(args.salmonindex)
     samplename = args.samplename
     nthreads = args.nthreads
 
@@ -205,20 +209,22 @@ if __name__ == '__main__':
     os.mkdir(sampledir)
     os.chdir(sampledir)
 
-    #uniquely aligning read files
-    if args.dedupUMI:
-        salmonR1 = samplename + '.dedup.r1.fq.gz'
-        salmonR2 = samplename + '.dedup.r2.fq.gz'
-    else:
-        salmonR1 = samplename + '.STARaligned.r1.fq.gz'
-        salmonR2 = samplename + '.STARaligned.r2.fq.gz'
 
     runSTAR(r1, r2, nthreads, STARindex, samplename)
     if args.dedupUMI:
         runDedup(samplename, nthreads)
-    bamtofastq(samplename, nthreads, args.dedupUMI)
-    runSalmon(salmonR1, salmonR2, nthreads, salmonindex, samplename)
-    os.chdir(sampledir)
-    runPostmaster(samplename, nthreads)
 
+    if args.libType == "LEXO":
+        salmonindex = os.path.abspath(args.salmonindex)
+        #uniquely aligning or deduplicated read files
+        if args.dedupUMI:
+            salmonR1 = samplename + '.dedup.r1.fq.gz'
+            salmonR2 = samplename + '.dedup.r2.fq.gz'
+        else:
+            salmonR1 = samplename + '.STARaligned.r1.fq.gz'
+            salmonR2 = samplename + '.STARaligned.r2.fq.gz'
 
+        bamtofastq(samplename, nthreads, args.dedupUMI)
+        runSalmon(salmonR1, salmonR2, nthreads, salmonindex, samplename)
+        os.chdir(sampledir)
+        runPostmaster(samplename, nthreads)
