@@ -1,0 +1,41 @@
+samples:
+    ["ATP5MC1_Rep1_pDBF","ATP5MC1_Rep1_mDBF"]
+
+libtype: "LEXO" # "SA" or "LEXO"
+dedupUMI: True # True or False
+threads: 32 # Number of threads
+STARindex: "/beevol/home/goeringr/Projects/OINC_seq/SSIV_tx_compare/LEXO/STARindex"
+Salmonindex: "/beevol/home/goeringr/Projects/OINC_seq/SSIV_tx_compare/LEXO/transcripts32.idx"
+
+pigpen:
+    # path to files
+    pigpen: "/beevol/home/goeringr/Projects/OINC_seq/test/py2test/pigpen.py"
+    gff: "/beevol/home/goeringr/Annotations/hg38/gencode.v32.annotation.gff3.gz"
+    genomeFASTA: "/beevol/home/goeringr/Annotations/hg38/GRCh38.p13.genome.fa"
+    snpfile: ""
+    maskbed: ""
+    ROIbed: ""
+    # comma separated string
+    controlsamples: "ATP5MC1_Rep1_mDBF"
+    # parameter values
+    SNPcoverage: "20"
+    SNPfreq: "0.2"
+    nconv: "1"
+    minMappingQual: "60"
+    # output directory name
+    outputDir: "PIGPEN"
+    # space separated string
+    tags: "--useSNPs --use_g_t --use_g_c --onlyConsiderOverlap --use_read1 --use_read2 --dedupUMI"
+
+bacon:
+    # path to files
+    bacon: "/beevol/home/goeringr/Projects/OINC_seq/test/py2test/bacon_glm.py" 
+    sampconds:
+        ["/beevol/home/goeringr/Projects/OINC_seq/OINC_MAVS/bacon_MAVS.txt"] 
+    minreads: ""
+    conditionA: "mDBF"
+    conditionB: "pDBF"
+    tags: "--use_g_t --use_g_c --considernonG"
+    output: 
+        ["MAVS.bacon.txt"]  
+                                                                           

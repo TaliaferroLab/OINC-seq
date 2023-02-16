@@ -1,0 +1,17 @@
+configfile: "config/config.yaml"
+
+include: "rules/UMIextract.smk"
+include: "rules/trimming.smk"
+include: "rules/STARalign.smk"
+include: "rules/UMIdedup.smk"
+include: "rules/B2FQ.smk"
+include: "rules/runSalmon.smk"
+include: "rules/runPM.smk"
+include: "rules/runPigpen.smk"
+include: "rules/runBacon.smk"
+
+rule all:
+    input:
+        #expand("PIGPEN_alignments/{outDir}/{sample}.pigpen.txt", sample=config["samples"], outDir=config["pigpen"]["outputDir"]),
+        expand("PIGPEN_alignments/{outDir}/{sample}.bacon.txt", sample=config["bacon"]["output"], outDir=config["pigpen"]["outputDir"]),
+        
