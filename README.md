@@ -42,6 +42,9 @@ PIGPEN has the following prerequisites:
 - bamtools >= 2.5.2
 - salmon >= 1.9.0
 - gffutils >= 0.11.0
+- umi_tools >= 1.1.0 (if UMI collapsing is desired)
+- [postmaster](https://github.com/COMBINE-lab/postmaster)
+>Note: postmaster is a [rust](https://www.rust-lang.org/) package. Installing it requires rust (which itself is installable using [conda](https://anaconda.org/conda-forge/rust)). Once rust is installed, use `cargo install --git https://github.com/COMBINE-lab/postmaster` to install postmaster.
 
 BACON has the following prerequisites:
 
