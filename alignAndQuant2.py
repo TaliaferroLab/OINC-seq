@@ -39,8 +39,14 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     os.mkdir(outdir)
     prefix = outdir + '/' + samplename
 
-    command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
-               'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
+    if reads2:
+        command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
+                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
+
+    elif not reads2:
+        command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
+                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
+
 
     print('Running STAR for {0}...'.format(samplename))
     
@@ -57,7 +63,7 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     print('Finished STAR for {0}!'.format(samplename))
 
 
-def bamtofastq(samplename, nthreads):
+def bamtofastq(samplename, nthreads, reads2):
     #Given a bam file of uniquely aligned reads (produced from runSTAR), rederive these reads as fastq in preparation for submission to salmon
     #This function isn't needed anymore as we will align all reads.
     if not os.path.exists('STAR'):
@@ -78,7 +84,10 @@ def bamtofastq(samplename, nthreads):
     r1file = samplename + '.unique.r1.fq.gz'
     r2file = samplename + '.unique.r2.fq.gz'
     print('Writing fastq file of uniquely aligned reads for {0}...'.format(samplename))
-    command = ['samtools', 'fastq', '--threads', nthreads, '-1', r1file, '-2', r2file, '-0', '/dev/null', '-s', '/dev/null', '-n', sortedbam]
+    if reads2:
+        command = ['samtools', 'fastq', '--threads', nthreads, '-1', r1file, '-2', r2file, '-0', '/dev/null', '-s', '/dev/null', '-n', sortedbam]
+    elif not reads2:
+        command = ['samtools', 'fastq', '--threads', nthreads, '-0', r1file, '-n', sortedbam]
     subprocess.call(command)
     print('Done writing fastq files for {0}!'.format(samplename))
 
@@ -92,12 +101,17 @@ def runSalmon(reads1, reads2, nthreads, salmonindex, samplename):
 
     idx = os.path.abspath(salmonindex)
     r1 = os.path.abspath(reads1)
-    r2 = os.path.abspath(reads2)
+    if reads2:
+        r2 = os.path.abspath(reads2)
 
     os.chdir('salmon')
 
-    command = ['salmon', 'quant', '--libType', 'A', '-p', nthreads, '--seqBias', '--gcBias',
+    if reads2:
+        command = ['salmon', 'quant', '--libType', 'A', '-p', nthreads, '--seqBias', '--gcBias',
                '--validateMappings', '-1', r1, '-2', r2, '-o', samplename, '--index', idx, '--writeMappings={0}.salmon.bam'.format(samplename), '--writeQualities']
+    elif not reads2:
+        command = ['salmon', 'quant', '--libType', 'A', '-p', nthreads, '--seqBias',
+                   '--validateMappings', '-r', r1, '-o', samplename, '--index', idx, '--writeMappings={0}.salmon.bam'.format(samplename), '--writeQualities']
 
     print('Running salmon for {0}...'.format(samplename))
 
@@ -108,6 +122,7 @@ def runSalmon(reads1, reads2, nthreads, salmonindex, samplename):
     quantfile = os.path.join(outputdir, 'quant.sf')
     movedquantfile = os.path.join(os.getcwd(), '{0}.quant.sf'.format(samplename))
     os.rename(quantfile, movedquantfile)
+
 
     print('Finished salmon for {0}!'.format(samplename))
 
@@ -152,7 +167,7 @@ def addMD(samplename, reffasta, nthreads):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Align and quantify reads using STAR, salmon, and postmaster in preparation for analysis with PIGPEN.')
     parser.add_argument('--forwardreads', type = str, help = 'Forward reads. Gzipped fastq.')
-    parser.add_argument('--reversereads', type = str, help = 'Reverse reads. Gzipped fastq.')
+    parser.add_argument('--reversereads', type = str, help = 'Reverse reads. Gzipped fastq. Do not supply if using single end reads.')
     parser.add_argument('--nthreads', type = str, help = 'Number of threads to use for alignment and quantification.')
     parser.add_argument('--STARindex', type = str, help = 'STAR index directory.')
     parser.add_argument('--salmonindex', type = str, help = 'Salmon index directory.')
@@ -160,7 +175,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     r1 = os.path.abspath(args.forwardreads)
-    r2 = os.path.abspath(args.reversereads)
+    if args.reversereads:
+        r2 = os.path.abspath(args.reversereads)
+    elif not args.reversereads:
+        r2 = None
     STARindex = os.path.abspath(args.STARindex)
     salmonindex = os.path.abspath(args.salmonindex)
     samplename = args.samplename
