@@ -142,7 +142,7 @@ PIGPEN can use G -> T conversions, G -> C conversions, or both when calculating 
 
 ## Using one read of a paired end sample
 
-The use of one read in a paired end sample for conversion quantification can be controlled using `--use_read1` and `--use_read2`. To use both reads, supply both flags. `--onlyConsiderOverlap` requires the use of both reads. Importantly, both reads are still used for genomic alignment and transcript quantification.
+The use of one read in a paired end sample for conversion quantification can be controlled using `--use_read1` and `--use_read2`. To use both reads, supply both flags. `--onlyConsiderOverlap` requires the use of both reads. Importantly, both reads can still used for genomic alignment and transcript quantification.
 
 ## Mask specific positions
 
