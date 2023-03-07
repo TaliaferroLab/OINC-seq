@@ -36,11 +36,11 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
 
     if reads2:
         command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
-                'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '-–outFilterMultimapNmax', '1', '--outSAMattributes', 'MD', 'NH']
+                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
 
     elif not reads2:
         command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
-                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '-–outFilterMultimapNmax', '1', '--outSAMattributes', 'MD', 'NH']
+                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
 
     print('Running STAR for {0}...'.format(samplename))
     
