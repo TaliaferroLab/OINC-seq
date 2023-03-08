@@ -30,7 +30,7 @@ def revcomp(nt):
     return nt_rc
 
 
-def iteratereads_singleend(bam, snps = None):
+def iteratereads_singleend(bam, use_g_t, use_g_c, nConv, minMappingQual, snps = None, maskpositions = None, verbosity = 'high'):
     #Read through a bam containing single end reads (or if it contains paired end reads, just use read 1)
     #Find nt conversion locations for each read.
     #Store the number of each conversion for each read in a dictionary.
@@ -39,52 +39,70 @@ def iteratereads_singleend(bam, snps = None):
 
     readcounter = 0
     convs = {} #{readid : dictionary of all conversions}
+    save = pysam.set_verbosity(0)
     with pysam.AlignmentFile(bam, 'r') as infh:
-        print('Finding nucleotide conversions in {0}...'.format(os.path.basename(bam)))
+        if verbosity == 'high':
+            print('Finding nucleotide conversions in {0}...'.format(os.path.basename(bam)))
         for read in infh.fetch(until_eof = True):
-            if read.is_secondary or read.is_supplementary or read.is_unmapped:
+            if read.is_secondary or read.is_supplementary or read.is_unmapped or read.mapping_quality < minMappingQual:
                 continue
-            if read.is_read1:
-                readcounter +=1
-                if readcounter % 10000000 == 0:
+            readcounter +=1
+            if readcounter % 10000000 == 0:
+                if verbosity == 'high':
                     print('Finding nucleotide conversions in read {0}...'.format(readcounter))
+            
+            queryname = read.query_name
+            queryseq = read.query_sequence #this is always on the + strand, no matter what strand the read maps to
+            chrm = read.reference_name
+            qualities = list(read.query_qualities)
 
-                #Check mapping quality
-                #For nextgenmap, max mapq is 60
-                if read.mapping_quality < 255:
-                    continue
-                
-                queryname = read.query_name
-                queryseq = read.query_sequence #this is always on the + strand, no matter what strand the read maps to
-                chrom = read.reference_name
-                qualities = list(read.query_qualities)
-
-                #Get a set of snp locations if we have them
-                if snps:
-                    if chrm in snps:
-                        snplocations = snps[chrm] #set of coordinates to mask
-                    else:
-                        snplocations = None
+            #Get a set of snp locations if we have them
+            if snps:
+                if chrm in snps:
+                    snplocations = snps[chrm] #set of coordinates to mask
                 else:
                     snplocations = None
+            else:
+                snplocations = None
 
-                if read.is_reverse:
-                    strand = '-'
-                elif not read.is_reverse:
-                    strand = '+'
+                #Get a set of locations to mask if we have them
+            if maskpositions:
+                if chrm in maskpositions:
+                    # set of coordinates to manually mask
+                    masklocations = maskpositions[chrm]
+                else:
+                    masklocations = None
+            else:
+                masklocations = None
 
-                alignedpairs = read.get_aligned_pairs(with_seq = True)
-                readqualities = list(read.query_qualities)
-                convs_in_read = getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, chrom, snplocations)
-                
-                convs[queryname] = convs_in_read
+            #combine snps and manually masked positions into one set
+            #this combined set will be masklocations
+            if snplocations and masklocations:
+                masklocations.update(snplocations)
+            elif snplocations and not masklocations:
+                masklocations = snplocations
+            elif masklocations and not snplocations:
+                masklocations = masklocations
 
+            if read.is_reverse:
+                strand = '-'
+            elif not read.is_reverse:
+                strand = '+'
+
+            alignedpairs = read.get_aligned_pairs(with_seq = True)
+            readqualities = list(read.query_qualities)
+            convs_in_read = getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, masklocations, nConv, use_g_t, use_g_c)
+            
+            convs[queryname] = convs_in_read
+
+    if verbosity == 'high':
+        print('Queried {0} read pairs in {1}.'.format(readcounter, os.path.basename(bam)))
 
     #Pickle and write convs?
-    return convs
+    return convs, readcounter
                 
 
-def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, chrom, snplocations):
+def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, masklocations, nConv, use_g_t, use_g_c):
     #remove tuples that have None
     #These are either intronic or might have been soft-clipped
     #Tuples are (querypos, (0-based) refpos, refsequence)
@@ -93,17 +111,30 @@ def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, chrom
     #refnt and querynt, as supplied by pysam, are always + strand
     #everything here is assuming read is on sense strand
 
-    #snplocations is a set of chrm_coord locations. At these locations, all queries will be treated as not having a conversion
+    #masklocations is a set of chrm_coord locations. At these locations, all queries will be treated as not having a conversion
 
+    #remove positions where querypos is None
+    #i'm pretty sure these query positions won't have quality scores
+    alignedpairs = [x for x in alignedpairs if x[0] != None]
+
+    #Add quality scores to alignedpairs tuples
+    #will now be (querypos, refpos, refseqeunce, qualityscore)
+    ap_withq = []
+    for ind, x in enumerate(alignedpairs):
+        x += (readqualities[ind],)
+        ap_withq.append(x)
+    alignedpairs = ap_withq
+
+    #Now remove positions where refsequence is None
+    #These may be places that got soft-clipped
     alignedpairs = [x for x in alignedpairs if None not in x]
 
-    #if we have snps, remove their locations from alignedpairs
-    #snplocations is a set of 0-based coordinates of snp locations to mask
-    if snplocations:
-        alignedpairs = [x for x in alignedpairs if x[1] not in snplocations]
+    #if we have locations to mask, remove their locations from alignedpairs
+    #masklocations is a set of 0-based coordinates of snp locations to mask
+    if masklocations:
+        alignedpairs = [x for x in alignedpairs if x[1] not in masklocations]
     
     convs = {} #counts of conversions x_y where x is reference sequence and y is query sequence
-    convlocations = defaultdict(list) #{type of conv : [locations of conversion]}
 
     possibleconvs = [
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
@@ -137,7 +168,7 @@ def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, chrom
 
         #If the quality at this position passes threshold, record the conversion.
         #Otherwise, skip it.
-        qscore = readqualities[alignedpair[0]]
+        qscore = alignedpair[3]
         if qscore >= 30: #can change this later
             convs[conv] +=1
         else:
@@ -615,7 +646,7 @@ def split_bam(bam, nproc):
     return splitbams
 
 
-def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, minMappingQual, nproc, use_g_t, use_g_c, use_read1, use_read2):
+def getmismatches(datatype, bam, onlyConsiderOverlap, snps, maskpositions, nConv, minMappingQual, nproc, use_g_t, use_g_c, use_read1, use_read2):
     #Actually run the mismatch code (calling iteratereads_pairedend)
     #use multiprocessing
     #If there's only one processor, easier to use iteratereads_pairedend() directly.
@@ -625,12 +656,18 @@ def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, minMappi
     splitbams = split_bam(bam, int(nproc))
     argslist = []
     for x in splitbams:
-        argslist.append((x, bool(onlyConsiderOverlap), bool(
-            use_g_t), bool(use_g_c), bool(use_read1), bool(use_read2), nConv, minMappingQual, snps, maskpositions, 'low'))
+        if datatype == 'paired':
+            argslist.append((x, bool(onlyConsiderOverlap), bool(
+                use_g_t), bool(use_g_c), bool(use_read1), bool(use_read2), nConv, minMappingQual, snps, maskpositions, 'low'))
+        elif datatype == 'single':
+            argslist.append((x, bool(use_g_t), bool(use_g_c), nConv, minMappingQual, snps, maskpositions, 'low'))
 
     #items returned from iteratereads_pairedend are in a list, one per process
     totalreadcounter = 0 #number of reads across all the split bams
-    results = pool.starmap(iteratereads_pairedend, argslist) #thhis actually returns two things, convs and readcounter
+    if datatype == 'paired':
+        results = pool.starmap(iteratereads_pairedend, argslist) #thhis actually returns two things, convs and readcounter
+    elif datatype == 'single':
+        results = pool.starmap(iteratereads_singleend, argslist)
     #so i bet this is a nested list where the first item in each list in a convs and the second item is a readcounter
     convs_split = []
     for result in results:
@@ -638,7 +675,10 @@ def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, minMappi
     for result in results:
         totalreadcounter += result[1]
 
-    print('Queried {0} read pairs in {1}.'.format(totalreadcounter, os.path.basename(bam)))
+    if datatype == 'paired':
+        print('Queried {0} read pairs in {1}.'.format(totalreadcounter, os.path.basename(bam)))
+    elif datatype == 'single':
+        print('Queried {0} reads in {1}.'.format(totalreadcounter, os.path.basename(bam)))
 
     #Reorganize convs_split into convs as it is without multiprocessing
     convs = {} #{readid : dictionary of all conversions}
@@ -656,7 +696,7 @@ def getmismatches(bam, onlyConsiderOverlap, snps, maskpositions, nConv, minMappi
 
         
 if __name__ == '__main__':
-    convs, readcounter = iteratereads_pairedend(sys.argv[1], False, True, True, True, True, 1, None, None, 'high')
-    #summarize_convs(convs, sys.argv[2])
+    convs, readcounter = iteratereads_singleend(sys.argv[1], True, True, 1, 255, None, None, 'high')
+    summarize_convs(convs, sys.argv[2])
 
     

@@ -14,6 +14,7 @@ from conversionsPerGene import getPerGene, writeConvsPerGene
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--datatype', type = str, choices = ['single', 'paired'], required = True, help = 'Single end or paired end data?')
     parser.add_argument('--samplenames', type = str, help = 'Comma separated list of samples to quantify.', required = True)
     parser.add_argument('--controlsamples', type = str, help = 'Comma separated list of control samples (i.e. those where no *induced* conversions are expected). May be a subset of samplenames. Required if SNPs are to be considered and a snpfile is not supplied.')
     parser.add_argument('--gff', type = str, help = 'Genome annotation in gff format.')
@@ -25,17 +26,23 @@ if __name__ == '__main__':
     parser.add_argument('--ROIbed', help = 'Optional. Bed file of specific regions of interest in which to quantify conversions. If supplied, only conversions in these regions will be quantified.', default = None)
     parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
     parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.4', default = 0.4)
-    parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair?')
+    parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair? Only possible with paired end data.')
     parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
     parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
-    parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions?')
-    parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions?')
+    parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions? Only useful with paired end data.')
+    parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions? Only useful with paired end data.')
     parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting. STAR unique mappers have MAPQ 255.', required = True)
-    parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for conversions to be counted. Default is 1.', default = 1)
+    parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for those conversions to be counted. Default is 1.', default = 1)
     parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
-    parser.add_argument('--dedupUMI', action = 'store_true', help = 'Deduplicate UMIs? requires UMI extract.')
+    parser.add_argument('--dedupUMI', action = 'store_true', help = 'Use deduplicated UMIs? Requires --dedupUMI to have been supplied to alignandquant.py.')
     args = parser.parse_args()
 
+    #If we have single end data, considering overlap of paired reads or only one read doesn't make sense
+    if args.datatype == 'single':
+        args.onlyConsiderOverlap = False
+        args.use_read1 = False
+        args.use_read2 = False
+    
     #Store command line arguments
     suppliedargs = {}
     for arg in vars(args):
@@ -46,8 +53,8 @@ if __name__ == '__main__':
     #Derive quant.sf, STAR bams, and postmaster bams
     samplenames = args.samplenames.split(',')
     salmonquants = [os.path.join(x, 'salmon', '{0}.quant.sf'.format(x)) for x in samplenames]
-    starbams = [os.path.join(x, 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(x)) for x in samplenames]
-    dedupbams = [os.path.join(x, 'STAR', '{0}.dedup.bam'.format(x)) for x in samplenames]
+    starbams = [os.path.join(x, 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(x)) for x in samplenames] #non-deduplicated bams
+    dedupbams = [os.path.join(x, 'STAR', '{0}.dedup.bam'.format(x)) for x in samplenames] #deduplicated bams
     postmasterbams = [os.path.join(x, 'postmaster', '{0}.postmaster.bam'.format(x)) for x in samplenames]
 
     #Take in list of control samples, make list of their corresponding star bams for SNP calling
@@ -72,7 +79,7 @@ if __name__ == '__main__':
         sys.exit()
 
     #We have to be using either read1 or read2 if not both
-    if not args.use_read1 and not args.use_read2:
+    if not args.use_read1 and not args.use_read2 and args.datatype == 'paired':
         print('We need to use read1 or read2, if not both! Add argument --use_read1 and/or --use_read2.')
         sys.exit()
 
@@ -127,9 +134,15 @@ if __name__ == '__main__':
             samplebam = samplebams[ind]
             sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
-                convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                if args.datatype == 'paired':
+                    convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c,
+                                                                args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                elif args.datatype == 'single':
+                    convs, readcounter = iterratereads_singleend(
+                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpostions, 'high')
             elif args.nproc > 1:
-                convs = getmismatches(samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+                convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv,
+                                      args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Getting posterior probabilities from salmon alignment file...')
             postmasterbam = postmasterbams[ind]
