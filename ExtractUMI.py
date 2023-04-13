@@ -45,13 +45,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Extract UMIs using umi-tools in preparation for analysis with AlignUMIquant.')
     parser.add_argument('--forwardreads', type = str, help = 'Forward reads. Gzipped fastq.', required = True)
     parser.add_argument('--reversereads', type = str, help = 'Reverse reads. Gzipped fastq.', required = True)
-    parser.add_argument('--samplenames', type = str, help = 'Sample name. Will be appended to output files.', required = True)
+    parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.', required = True)
     parser.add_argument('--lib_type', type = str, help = 'Library type. Either "LEXO" or "SA"', required = True)
     args = parser.parse_args()
     
     r1 = os.path.abspath(args.forwardreads)
     r2 = os.path.abspath(args.reversereads)    
-    samplename = args.samplenames
+    samplename = args.samplename
     lib_type = args.lib_type
     
     if args.lib_type not in ["LEXO", "SA"]:

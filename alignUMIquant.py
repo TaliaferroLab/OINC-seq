@@ -9,8 +9,11 @@ This will make a STAR-produced bam (for pigpen mutation calling)
 This bam will be deduplicated with UMI-tools then passed to salmon(for read assignment).
 It will then run postmaster to append transcript assignments to the salmon-produced bam.
 
-This is going to take in gzipped fastqs with UMIs extractsd,
+This is going to take in gzipped fastqs with UMIs extracted,
 a directory containing the STAR index for this genome, and a directory containing the salmon index for this genome.
+
+This means that, in addition to any adapter trimming, ***reads must have been first processed with umi_tools extract***.
+For quantseq libraries, this corresponds to the first 6 nt of read 1.
 
 Reads are aligned to the genome using STAR. This bam file will be used for mutation calling. 
 In this alignment, we allow multiple mapping reads, but only report the best alignment. 
@@ -76,7 +79,7 @@ def runDedup(samplename, nthreads):
     subprocess.run(command)
 
     #We don't need the STAR alignment file anymore, and it's pretty big
-    # os.remove(STARbam)
+    os.remove(STARbam)
 
     print('Finished deduplicating {0}!'.format(samplename))
 
