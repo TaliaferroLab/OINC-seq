@@ -185,10 +185,15 @@ if __name__ == '__main__':
             samplebam = samplebams[ind]
             sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
-                convs, readcounter = iteratereads_pairedend(
-                    samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                if args.datatype == 'paired':
+                    convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c,
+                                                                args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                elif args.datatype == 'single':
+                    convs, readcounter = iterratereads_singleend(
+                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpostions, 'high')
+
             elif args.nproc > 1:
-                convs = getmismatches(samplebam, args.onlyConsiderOverlap, snps, maskpositions,
+                convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions,
                                       args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
 
             print('Assigning reads to genes in supplied bed file...')
