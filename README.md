@@ -26,7 +26,7 @@ Uniquely aligned reads are then extracted and used to quantify transcript abunda
 
 Following the creation of alignment files produced by `STAR` and `postmaster` as well as transcript quantifications produced by `salmon`, these files are then used by `pigpen.py` to identify nucleotide conversions, assign them to transcripts and genes, and then quantify the number of conversions in each gene. A graphical overview of the flow of `PIGPEN` is shown below.
 
-![alt text](https://images.squarespace-cdn.com/content/v1/591d9c8cbebafbf01b1e28f9/f4a15b89-b3f1-4a10-84fc-5e669594f4e4/updatedPIGPENscheme.png?format=1500w "PIGPEN overview")
+![alt text](https://images.squarespace-cdn.com/content/v1/591d9c8cbebafbf01b1e28f9/77d2062a-a31e-41b9-90ad-5963f618c6a6/updatedPIGPENscheme.png?format=1000w "PIGPEN overview")
 
 ## Requirements
 
