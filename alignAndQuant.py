@@ -18,9 +18,14 @@ import argparse
 #the salmon output is <samplename>.quant.sf and <samplename>.salmon.bam in salmon/,
 #and the postmaster output is <samplename>.postmaster.bam in postmaster/
 
+#If --allowmultimap is provided, then all reads are given to salmon for quantification. If it is not provided,
+#then only uniquely aligning reads are written to the STAR alignment and later provided to salmon for quantification.
+
+#Keep in mind that pigpen.py has a minimum quality score filter that can also be utilized later for filtering multimapping reads.
+
 #Requires STAR, salmon(>= 1.9.0), and postmaster be in user's PATH.
 
-def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
+def runSTAR(reads1, reads2, nthreads, STARindex, samplename, allowmultimap):
     if not os.path.exists('STAR'):
         os.mkdir('STAR')
 
@@ -34,13 +39,23 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     os.mkdir(outdir)
     prefix = outdir + '/' + samplename
 
-    if reads2:
-        command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
-                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
+    if not allowmultimap:
+        if reads2:
+            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
+                    'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
 
-    elif not reads2:
-        command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
-                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
+        elif not reads2:
+            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
+                    'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
+
+    elif allowmultimap:
+        if reads2:
+            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
+                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
+
+        elif not reads2:
+            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
+                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
 
     print('Running STAR for {0}...'.format(samplename))
     
@@ -117,11 +132,6 @@ def runSalmon(reads1, reads2, nthreads, salmonindex, samplename):
     movedquantfile = os.path.join(os.getcwd(), '{0}.quant.sf'.format(samplename))
     os.rename(quantfile, movedquantfile)
 
-    #Remove uniquely aligning read files
-    os.remove(r1)
-    if reads2:
-        os.remove(r2)
-
     print('Finished salmon for {0}!'.format(samplename))
 
 def runPostmaster(samplename, nthreads):
@@ -170,6 +180,7 @@ if __name__ == '__main__':
     parser.add_argument('--STARindex', type = str, help = 'STAR index directory.')
     parser.add_argument('--salmonindex', type = str, help = 'Salmon index directory.')
     parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.')
+    parser.add_argument('--allowmultimap', action = 'store_true', help = 'Consider multimapping reads in alignments and quantifications?' )
     args = parser.parse_args()
 
     r1 = os.path.abspath(args.forwardreads)
@@ -181,6 +192,7 @@ if __name__ == '__main__':
     salmonindex = os.path.abspath(args.salmonindex)
     samplename = args.samplename
     nthreads = args.nthreads
+    allowmultimap = args.allowmultimap
 
     wd = os.path.abspath(os.getcwd())
     sampledir = os.path.join(wd, samplename)
@@ -189,16 +201,22 @@ if __name__ == '__main__':
     os.mkdir(sampledir)
     os.chdir(sampledir)
 
-    #uniquely aligning read files
-    uniquer1 = samplename + '.unique.r1.fq.gz'
-    if args.reversereads:
-        uniquer2 = samplename + '.unique.r2.fq.gz'
-    elif not args.reversereads:
-        uniquer2 = None
-
-    runSTAR(r1, r2, nthreads, STARindex, samplename)
-    bamtofastq(samplename, nthreads, r2)
-    runSalmon(uniquer1, uniquer2, nthreads, salmonindex, samplename)
+    runSTAR(r1, r2, nthreads, STARindex, samplename, allowmultimap)
+    if not allowmultimap:
+        #uniquely aligning read files
+        uniquer1 = samplename + '.unique.r1.fq.gz'
+        if args.reversereads:
+            uniquer2 = samplename + '.unique.r2.fq.gz'
+        elif not args.reversereads:
+            uniquer2 = None
+        bamtofastq(samplename, nthreads, r2)
+        runSalmon(uniquer1, uniquer2, nthreads, salmonindex, samplename)
+        #Remove uniquely aligning read files
+        os.remove(uniquer1)
+        if args.reversereads:
+            os.remove(uniquer2)
+    elif allowmultimap:
+        runSalmon(r1, r2, nthreads, salmonindex, samplename)
     os.chdir(sampledir)
     runPostmaster(samplename, nthreads)
 
