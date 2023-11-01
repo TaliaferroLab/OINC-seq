@@ -3,6 +3,7 @@ import subprocess
 import sys
 import shutil
 import argparse
+import pysam
 
 #Given a pair of read files, align reads using STAR and quantify/align reads using salmon.
 #This will make a STAR-produced bam (for pigpen mutation calling) and a salmon-produced bam (for read assignment).
@@ -18,14 +19,11 @@ import argparse
 #the salmon output is <samplename>.quant.sf and <samplename>.salmon.bam in salmon/,
 #and the postmaster output is <samplename>.postmaster.bam in postmaster/
 
-#If --allowmultimap is provided, then all reads are given to salmon for quantification. If it is not provided,
-#then only uniquely aligning reads are written to the STAR alignment and later provided to salmon for quantification.
-
-#Keep in mind that pigpen.py has a minimum quality score filter that can also be utilized later for filtering multimapping reads.
+#maxmap parameter can be used for filtering multimapping reads
 
 #Requires STAR, salmon(>= 1.9.0), and postmaster be in user's PATH.
 
-def runSTAR(reads1, reads2, nthreads, STARindex, samplename, allowmultimap):
+def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     if not os.path.exists('STAR'):
         os.mkdir('STAR')
 
@@ -39,23 +37,14 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename, allowmultimap):
     os.mkdir(outdir)
     prefix = outdir + '/' + samplename
 
-    if not allowmultimap:
-        if reads2:
-            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
-                    'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
 
-        elif not reads2:
-            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
-                    'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMattributes', 'MD', 'NH', '-–outFilterMultimapNmax', '1']
+    if reads2:
+        command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
+                'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
 
-    elif allowmultimap:
-        if reads2:
-            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, reads2, '--readFilesCommand',
-                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
-
-        elif not reads2:
-            command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
-                   'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
+    elif not reads2:
+        command = ['STAR', '--runMode', 'alignReads', '--runThreadN', nthreads, '--genomeLoad', 'NoSharedMemory', '--genomeDir', STARindex, '--readFilesIn', reads1, '--readFilesCommand',
+                'zcat', '--outFileNamePrefix', prefix, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--outSAMstrandField', 'intronMotif', '--outSAMmultNmax', '1', '--outSAMattributes', 'MD', 'NH']
 
     print('Running STAR for {0}...'.format(samplename))
     
@@ -71,15 +60,43 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename, allowmultimap):
 
     print('Finished STAR for {0}!'.format(samplename))
 
+def filterbam(samplename, maxmap):
+    #Take a bam and filter it, only keeping reads that map to <= maxmap locations using NH:i tag
+    #For some reason whether STAR uses --outFilterMultiMapNmax is unpredictably variable, so we will do it this way.
+    cwd = os.getcwd()
+    outdir = os.path.join(cwd, 'STAR')
+    maxmap = int(maxmap)
+    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
+    outbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.multifiltered.out.bam')
+
+    print('Removing reads with > {0} alignments...'.format(maxmap))
+
+    with pysam.AlignmentFile(inbam, 'rb') as infh, pysam.AlignmentFile(outbam, 'wb', template = infh) as outfh:
+        readcount = 0
+        filteredreadcount = 0
+        for read in infh.fetch(until_eof = True):
+            readcount +=1
+            nh = read.get_tag('NH')
+            if nh <= maxmap:
+                filteredreadcount +=1
+                outfh.write(read)
+
+    #Remove unfiltered bam
+    os.remove(inbam)
+
+    filteredpct = round((filteredreadcount / readcount) * 100, 3) 
+
+    print('Looked through {0} reads. {1} ({2}%) had {3} or fewer alignments.'.format(readcount, filteredreadcount, filteredpct, maxmap))
+
 
 def bamtofastq(samplename, nthreads, reads2):
-    #Given a bam file of uniquely aligned reads (produced from runSTAR), rederive these reads as fastq in preparation for submission to salmon
+    #Given a bam file of aligned reads (produced from runSTAR), rederive these reads as fastq in preparation for submission to salmon
     if not os.path.exists('STAR'):
         os.mkdir('STAR')
 
     cwd = os.getcwd()
     outdir = os.path.join(cwd, 'STAR')
-    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
+    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.multifiltered.out.bam')
     sortedbam = os.path.join(outdir, 'temp.namesort.bam')
 
     #First sort bam file by readname
@@ -89,9 +106,9 @@ def bamtofastq(samplename, nthreads, reads2):
     print('Done!')
 
     #Now derive fastq
-    r1file = samplename + '.unique.r1.fq.gz'
-    r2file = samplename + '.unique.r2.fq.gz'
-    print('Writing fastq file of uniquely aligned reads for {0}...'.format(samplename))
+    r1file = samplename + '.aligned.r1.fq.gz'
+    r2file = samplename + '.aligned.r2.fq.gz'
+    print('Writing fastq file of aligned reads for {0}...'.format(samplename))
     if reads2:
         command = ['samtools', 'fastq', '--threads', nthreads, '-1', r1file, '-2', r2file, '-0', '/dev/null', '-s', '/dev/null', '-n', sortedbam]
     elif not reads2:
@@ -103,7 +120,7 @@ def bamtofastq(samplename, nthreads, reads2):
 
 
 def runSalmon(reads1, reads2, nthreads, salmonindex, samplename):
-    #Take in those uniquely aligning reads and quantify transcript abundance with them using salmon.
+    #Take in those aligning reads and quantify transcript abundance with them using salmon.
 
     if not os.path.exists('salmon'):
         os.mkdir('salmon')
@@ -180,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--STARindex', type = str, help = 'STAR index directory.')
     parser.add_argument('--salmonindex', type = str, help = 'Salmon index directory.')
     parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.')
-    parser.add_argument('--allowmultimap', action = 'store_true', help = 'Consider multimapping reads in alignments and quantifications?' )
+    parser.add_argument('--maxmap', type = int, help = 'Maximum number of allowable alignments for a read.')
     args = parser.parse_args()
 
     r1 = os.path.abspath(args.forwardreads)
@@ -192,7 +209,7 @@ if __name__ == '__main__':
     salmonindex = os.path.abspath(args.salmonindex)
     samplename = args.samplename
     nthreads = args.nthreads
-    allowmultimap = args.allowmultimap
+    maxmap = args.maxmap
 
     wd = os.path.abspath(os.getcwd())
     sampledir = os.path.join(wd, samplename)
@@ -201,22 +218,22 @@ if __name__ == '__main__':
     os.mkdir(sampledir)
     os.chdir(sampledir)
 
-    runSTAR(r1, r2, nthreads, STARindex, samplename, allowmultimap)
-    if not allowmultimap:
-        #uniquely aligning read files
-        uniquer1 = samplename + '.unique.r1.fq.gz'
-        if args.reversereads:
-            uniquer2 = samplename + '.unique.r2.fq.gz'
-        elif not args.reversereads:
-            uniquer2 = None
-        bamtofastq(samplename, nthreads, r2)
-        runSalmon(uniquer1, uniquer2, nthreads, salmonindex, samplename)
-        #Remove uniquely aligning read files
-        os.remove(uniquer1)
-        if args.reversereads:
-            os.remove(uniquer2)
-    elif allowmultimap:
-        runSalmon(r1, r2, nthreads, salmonindex, samplename)
+    runSTAR(r1, r2, nthreads, STARindex, samplename)
+    filterbam(samplename, maxmap)
+
+    #aligned read files
+    alignedr1 = samplename + '.aligned.r1.fq.gz'
+    if args.reversereads:
+        alignedr2 = samplename + '.aligned.r2.fq.gz'
+    elif not args.reversereads:
+        alignedr2 = None
+    bamtofastq(samplename, nthreads, r2)
+    runSalmon(alignedr1, alignedr2, nthreads, salmonindex, samplename)
+    #Remove aligned fastqs
+    os.chdir(sampledir)
+    os.remove(alignedr1)
+    if args.reversereads:
+        os.remove(alignedr2)
     os.chdir(sampledir)
     runPostmaster(samplename, nthreads)
 
