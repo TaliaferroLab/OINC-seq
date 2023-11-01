@@ -54,7 +54,7 @@ def processOverlaps(overlaps, numpairs):
         txs = overlaps[read]
         maxtx = max(txs, key = txs.get)
         overlaplength = txs[maxtx] #can implement minimum overlap here
-        if overlaplength >= 225:
+        if overlaplength >= 80:
             gene = maxtx.split('_')[0]
             read2gene[read] = gene
 
