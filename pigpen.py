@@ -9,6 +9,7 @@ from snps import getSNPs, recordSNPs
 from maskpositions import readmaskbed
 from getmismatches import iteratereads_pairedend, getmismatches
 from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+#from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
 
@@ -34,7 +35,6 @@ if __name__ == '__main__':
     parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting. STAR unique mappers have MAPQ 255.', required = True)
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for those conversions to be counted. Default is 1.', default = 1)
     parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
-    parser.add_argument('--dedupUMI', action = 'store_true', help = 'Use deduplicated UMIs? Requires --dedupUMI to have been supplied to alignandquant.py.')
     args = parser.parse_args()
 
     #If we have single end data, considering overlap of paired reads or only one read doesn't make sense
@@ -54,7 +54,6 @@ if __name__ == '__main__':
     samplenames = args.samplenames.split(',')
     salmonquants = [os.path.join(x, 'salmon', '{0}.quant.sf'.format(x)) for x in samplenames]
     starbams = [os.path.join(x, 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(x)) for x in samplenames] #non-deduplicated bams
-    dedupbams = [os.path.join(x, 'STAR', '{0}.dedup.bam'.format(x)) for x in samplenames] #deduplicated bams
     postmasterbams = [os.path.join(x, 'postmaster', '{0}.postmaster.bam'.format(x)) for x in samplenames]
 
     #Take in list of control samples, make list of their corresponding star bams for SNP calling
@@ -64,14 +63,9 @@ if __name__ == '__main__':
     samplebams = []
     controlsamplebams = []
     for ind, x in enumerate(samplenames):
-        if args.dedupUMI:
-            samplebams.append(dedupbams[ind])
-            if args.controlsamples and x in controlsamples:
-                controlsamplebams.append(dedupbams[ind])
-        else:
-            samplebams.append(starbams[ind])
-            if args.controlsamples and x in controlsamples:
-                controlsamplebams.append(starbams[ind])
+        samplebams.append(starbams[ind])
+        if args.controlsamples and x in controlsamples:
+            controlsamplebams.append(starbams[ind])
 
     #We have to be either looking for G->T or G->C, if not both
     if not args.use_g_t and not args.use_g_c:
