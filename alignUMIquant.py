@@ -3,6 +3,8 @@ import subprocess
 import sys
 import shutil
 import argparse
+import pysam
+
 '''
 Given a pair of read files, align reads using STAR, deduplicate reads by UMI, and quantify reads using salmon.
 This will make a STAR-produced bam (for pigpen mutation calling) 
@@ -62,6 +64,46 @@ def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     print('Finished STAR for {0}!'.format(samplename))
 
 
+def filterbam(samplename, maxmap):
+    #Take a bam and filter it, only keeping reads that map to <= maxmap locations using NH:i tag
+    #For some reason whether STAR uses --outFilterMultiMapNmax is unpredictably variable, so we will do it this way.
+    cwd = os.getcwd()
+    outdir = os.path.join(cwd, 'STAR')
+    maxmap = int(maxmap)
+    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
+    outbam = os.path.join(outdir, samplename +
+                          'Aligned.sortedByCoord.multifiltered.out.bam')
+
+    print('Removing reads with > {0} alignments...'.format(maxmap))
+
+    with pysam.AlignmentFile(inbam, 'rb') as infh, pysam.AlignmentFile(outbam, 'wb', template=infh) as outfh:
+        readcount = 0
+        filteredreadcount = 0
+        for read in infh.fetch(until_eof=True):
+            readcount += 1
+            nh = read.get_tag('NH')
+            if nh <= maxmap:
+                filteredreadcount += 1
+                outfh.write(read)
+
+    #Remove unfiltered bam and its index
+    os.remove(inbam)
+    os.remove(inbam + '.bai')
+    #Rename filtered bam so that it has the same name as the original
+    #This helps later when pipgen is looking for bams with certain expected names
+    os.rename(outbam, inbam)
+    #index filtered bam
+    bamindex = inbam + '.bai'
+    indexCMD = 'samtools index ' + inbam
+    index = subprocess.Popen(indexCMD, shell=True)
+    index.wait()
+
+    filteredpct = round((filteredreadcount / readcount) * 100, 3)
+
+    print('Looked through {0} reads. {1} ({2}%) had {3} or fewer alignments.'.format(
+        readcount, filteredreadcount, filteredpct, maxmap))
+
+
 def runDedup(samplename, nthreads):
     STARbam = os.path.join(os.getcwd(), 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(samplename))
     dedupbam = os.path.join(os.getcwd(), 'STAR', '{0}.dedup.bam'.format(samplename))
@@ -79,22 +121,25 @@ def runDedup(samplename, nthreads):
     subprocess.run(command)
 
     #We don't need the STAR alignment file anymore, and it's pretty big
-    os.remove(STARbam)
+    #Rename to the old name so downstream code finds the bams it's looking for
+    os.rename(dedupbam, STARbam)
+    #Reindex deduplicated bam
+    bamindex = STARbam + '.bai'
+    indexCMD = 'samtools index ' + STARbam
+    index = subprocess.Popen(indexCMD, shell=True)
+    index.wait()
 
     print('Finished deduplicating {0}!'.format(samplename))
 
 
-def bamtofastq(samplename, nthreads, dedup):
+def bamtofastq(samplename, nthreads, dedup, reads2):
     #Given a bam file of uniquely aligned reads (produced from runSTAR), rederive these reads as fastq in preparation for submission to salmon
     if not os.path.exists('STAR'):
         os.mkdir('STAR')
 
     cwd = os.getcwd()
     outdir = os.path.join(cwd, 'STAR')
-    if dedup:
-        inbam = os.path.join(outdir, samplename + '.dedup.bam')
-    else:
-        inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
+    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
     sortedbam = os.path.join(outdir, 'temp.namesort.bam')
 
     #First sort bam file by readname
@@ -104,16 +149,19 @@ def bamtofastq(samplename, nthreads, dedup):
     print('Done!')
 
     #Now derive fastq
+    r1file = samplename + '.aligned.r1.fq.gz'
+    r2file = samplename + '.aligned.r2.fq.gz'
     if dedup:
-        r1file = samplename + '.dedup.r1.fq.gz'
-        r2file = samplename + '.dedup.r2.fq.gz'
-    else:
-        r1file = samplename + '.STARaligned.r1.fq.gz'
-        r2file = samplename + '.STARaligned.r2.fq.gz'
-    print('Writing fastq file of deduplicated reads for {0}...'.format(samplename))
-    command = ['samtools', 'fastq', '--threads', nthreads, '-1', r1file, '-2', r2file, '-0', '/dev/null', '-s', '/dev/null', '-n', sortedbam]
+        print('Writing fastq file of deduplicated reads for {0}...'.format(samplename))
+    elif not dedup:
+        print('Writing fastq file of aligned reads for {0}...'.format(samplename))
+    if reads2:
+        command = ['samtools', 'fastq', '--threads', nthreads, '-1', r1file, '-2', r2file, '-0', '/dev/null', '-s', '/dev/null', '-n', sortedbam]
+    elif not reads2:
+        command = ['samtools', 'fastq', '--threads', nthreads, '-0', r1file, '-n', sortedbam]
     subprocess.call(command)
     print('Done writing fastq files for {0}!'.format(samplename))
+    
     os.remove(sortedbam)
 
 
@@ -144,7 +192,8 @@ def runSalmon(reads1, reads2, nthreads, salmonindex, samplename):
 
     #Remove uniquely aligning read files
     os.remove(r1)
-    os.remove(r2)
+    if reads2:
+        os.remove(r2)
 
     print('Finished salmon for {0}!'.format(samplename))
 
@@ -197,13 +246,20 @@ if __name__ == '__main__':
     parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.')
     parser.add_argument('--dedupUMI', action = 'store_true', help = 'Deduplicate UMIs? requires UMI extract.')
     parser.add_argument('--libType', type = str, help = 'Library Type, either "LEXO" or "SA"')
+    parser.add_argument(
+        '--maxmap', type=int, help='Maximum number of allowable alignments for a read.')
     args = parser.parse_args()
 
     r1 = os.path.abspath(args.forwardreads)
-    r2 = os.path.abspath(args.reversereads)
+    if args.reversereads:
+        r2 = os.path.abspath(args.reversereads)
+    elif not args.reversereads:
+        r2 = None
     STARindex = os.path.abspath(args.STARindex)
+    salmonindex = os.path.abspath(args.salmonindex)
     samplename = args.samplename
     nthreads = args.nthreads
+    maxmap = args.maxmap
 
     wd = os.path.abspath(os.getcwd())
     sampledir = os.path.join(wd, samplename)
@@ -214,20 +270,19 @@ if __name__ == '__main__':
 
 
     runSTAR(r1, r2, nthreads, STARindex, samplename)
+    filterbam(samplename, maxmap)
     if args.dedupUMI:
         runDedup(samplename, nthreads)
 
-    if args.libType == "LEXO":
-        salmonindex = os.path.abspath(args.salmonindex)
-        #uniquely aligning or deduplicated read files
-        if args.dedupUMI:
-            salmonR1 = samplename + '.dedup.r1.fq.gz'
-            salmonR2 = samplename + '.dedup.r2.fq.gz'
-        else:
-            salmonR1 = samplename + '.STARaligned.r1.fq.gz'
-            salmonR2 = samplename + '.STARaligned.r2.fq.gz'
-
-        bamtofastq(samplename, nthreads, args.dedupUMI)
-        runSalmon(salmonR1, salmonR2, nthreads, salmonindex, samplename)
-        os.chdir(sampledir)
-        runPostmaster(samplename, nthreads)
+    #aligned read files
+    alignedr1 = samplename + '.aligned.r1.fq.gz'
+    if args.reversereads:
+        alignedr2 = samplename + '.aligned.r2.fq.gz'
+    elif not args.reversereads:
+        alignedr2 = None
+    bamtofastq(samplename, nthreads, args.dedupUMI, r2)
+    runSalmon(alignedr1, alignedr2, nthreads, salmonindex, samplename)
+    #Remove aligned fastqs
+    os.chdir(sampledir)
+    os.chdir(sampledir)
+    runPostmaster(samplename, nthreads)
