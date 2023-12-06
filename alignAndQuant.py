@@ -81,8 +81,17 @@ def filterbam(samplename, maxmap):
                 filteredreadcount +=1
                 outfh.write(read)
 
-    #Remove unfiltered bam
+    #Remove unfiltered bam and its index
     os.remove(inbam)
+    os.remove(inbam + '.bai')
+    #Rename filtered bam so that it has the same name as the original
+    #This helps later when pipgen is looking for bams with certain expected names
+    os.rename(outbam, inbam)
+    #index filtered bam
+    bamindex = inbam + '.bai'
+    indexCMD = 'samtools index ' + inbam
+    index = subprocess.Popen(indexCMD, shell=True)
+    index.wait()
 
     filteredpct = round((filteredreadcount / readcount) * 100, 3) 
 
@@ -96,7 +105,7 @@ def bamtofastq(samplename, nthreads, reads2):
 
     cwd = os.getcwd()
     outdir = os.path.join(cwd, 'STAR')
-    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.multifiltered.out.bam')
+    inbam = os.path.join(outdir, samplename + 'Aligned.sortedByCoord.out.bam')
     sortedbam = os.path.join(outdir, 'temp.namesort.bam')
 
     #First sort bam file by readname
