@@ -391,7 +391,7 @@ if __name__ == '__main__':
 
     #What metric should we care about?
     if args.considernonG:
-        metric == 'porc'
+        metric = 'porc'
     elif args.use_g_t and not args.use_g_c:
         metric = 'G_Trate'
     elif args.use_g_c and not args.use_g_t:
