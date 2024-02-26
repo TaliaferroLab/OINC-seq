@@ -30,9 +30,12 @@ if __name__ == '__main__':
     parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair? Only possible with paired end data.')
     parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
     parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
+    parser.add_argument('--use_g_x', action='store_true', help='Consider G->deletion conversions?')
+    parser.add_argument('--use_ng_xg', action='store_true', help='Consider NG->deletionG conversions?')
     parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions? Only useful with paired end data.')
     parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions? Only useful with paired end data.')
     parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting. STAR unique mappers have MAPQ 255.', required = True)
+    parser.add_argument('--minPhred', type = int, help = 'Minimum phred quality score for a base to be considered. Default = 30', default = 30)
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for those conversions to be counted. Default is 1.', default = 1)
     parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
     args = parser.parse_args()
@@ -129,14 +132,14 @@ if __name__ == '__main__':
             sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
                 if args.datatype == 'paired':
-                    convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c,
-                                                                args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                    convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg,
+                                                                args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
                     convs, readcounter = iterratereads_singleend(
                         samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpostions, 'high')
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv,
-                                      args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+                                      args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
 
             print('Getting posterior probabilities from salmon alignment file...')
             postmasterbam = postmasterbams[ind]
@@ -154,7 +157,7 @@ if __name__ == '__main__':
             if not os.path.exists(args.outputDir):
                 os.mkdir(args.outputDir)
             outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
-            writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outputfile, args.use_g_t, args.use_g_c)
+            writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outputfile, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg)
             print('Done!')
 
     #If there is a bed file of regions of interest supplied, then use that. Don't use the salmon/postmaster quantifications.
@@ -180,15 +183,15 @@ if __name__ == '__main__':
             sampleparams['samplebam'] = os.path.abspath(samplebam)
             if args.nproc == 1:
                 if args.datatype == 'paired':
-                    convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c,
-                                                                args.use_read1, args.use_read2, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                    convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg,
+                                                                args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
                     convs, readcounter = iterratereads_singleend(
                         samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpostions, 'high')
 
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions,
-                                      args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_read1, args.use_read2)
+                                      args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
 
             print('Assigning reads to genes in supplied bed file...')
             overlaps, numpairs = getReadOverlaps(samplebam, args.ROIbed, 'chrsort.txt')
@@ -197,4 +200,4 @@ if __name__ == '__main__':
             if not os.path.exists(args.outputDir):
                 os.mkdir(args.outputDir)
             outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
-            writeConvsPerGene(sampleparams, numreadspergene, convsPerGene, outputfile, args.use_g_t, args.use_g_c)
+            writeConvsPerGene(sampleparams, numreadspergene, convsPerGene, outputfile, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg)

@@ -108,7 +108,8 @@ def collapsetogene(txconvs, gff):
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
         'g_a', 'g_t', 'g_c', 'g_g', 'g_n',
         'c_a', 'c_t', 'c_c', 'c_g', 'c_n',
-        't_a', 't_t', 't_c', 't_g', 't_n']
+        't_a', 't_t', 't_c', 't_g', 't_n',
+        'a_x', 'g_x', 'c_x', 't_x', 'ng_xg']
 
     for gene in allgenes:
         geneconvs[gene] = {}
@@ -161,22 +162,23 @@ def readspergene(quantsf, tx2gene):
     return genecounts
 
 
-def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, use_g_t, use_g_c):
+def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, use_g_t, use_g_c, use_g_x, use_ng_xg):
     #Write number of conversions and readcounts for genes.
     possibleconvs = [
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
         'g_a', 'g_t', 'g_c', 'g_g', 'g_n',
         'c_a', 'c_t', 'c_c', 'c_g', 'c_n',
-        't_a', 't_t', 't_c', 't_g', 't_n']
+        't_a', 't_t', 't_c', 't_g', 't_n',
+        'a_x', 'g_x', 'c_x', 't_x', 'ng_xg']
 
     with open(outfile, 'w') as outfh:
         #Write arguments for this pigpen run
         for arg in sampleparams:
             outfh.write('#' + arg + '\t' + str(sampleparams[arg]) + '\n')
         #total G is number of ref Gs encountered
-        #convG is g_t + g_c (the ones we are interested in)
+        #convG is g_t + g_c + g_x + ng_xg (the ones we are interested in)
         outfh.write(('\t').join(['GeneID', 'GeneName', 'numreads'] + possibleconvs + [
-                    'totalG', 'convG', 'convGrate', 'G_Trate', 'G_Crate', 'porc']) + '\n')
+                    'totalG', 'convG', 'convGrate', 'G_Trate', 'G_Crate', 'G_Xrate', 'NG_XGrate', 'porc']) + '\n')
         genes = sorted(geneconvs.keys())
 
         for gene in genes:
@@ -190,21 +192,19 @@ def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, u
 
             convcounts = ['{:.2f}'.format(x) for x in convcounts]
 
-            totalG = c['g_g'] + c['g_c'] + c['g_t'] + c['g_a'] + c['g_n']
-            if use_g_t and use_g_c:
-                convG = c['g_c'] + c['g_t']
-            elif use_g_c and not use_g_t:
-                convG = c['g_c']
-            elif use_g_t and not use_g_c:
-                convG = c['g_t']
-            elif not use_g_t and not use_g_c:
-                print('ERROR: we have to be counting either G->T or G->C, if not both!')
-                sys.exit()
-                
+            totalG = c['g_g'] + c['g_c'] + c['g_t'] + c['g_a'] + c['g_n'] + c['g_x']
+            convG = 0
+            possiblegconv = ['g_t', 'g_c', 'g_x', 'ng_xg']
+            for ind, x in enumerate([use_g_t, use_g_c, use_g_x, use_ng_xg]):
+                if x == True:
+                    convG += c[possiblegconv[ind]]
+
             g_ccount = c['g_c']
             g_tcount = c['g_t']
+            g_xcount = c['g_x']
+            ng_xgcount = c['ng_xg']
 
-            totalmut = c['a_t'] + c['a_c'] + c['a_g'] + c['g_t'] + c['g_c'] + c['g_a'] + c['t_a'] + c['t_c'] + c['t_g'] + c['c_t'] + c['c_g'] + c['c_a']
+            totalmut = c['a_t'] + c['a_c'] + c['a_g'] + c['g_t'] + c['g_c'] + c['g_a'] + c['t_a'] + c['t_c'] + c['t_g'] + c['c_t'] + c['c_g'] + c['c_a'] + c['g_x'] + c['ng_xg']
             totalnonmut = c['a_a'] + c['g_g'] + c['c_c'] + c['t_t']
             allnt = totalmut + totalnonmut
 
@@ -222,6 +222,16 @@ def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, u
                 g_trate = g_tcount / totalG
             except ZeroDivisionError:
                 g_trate = 'NA'
+
+            try:
+                g_xrate = g_xcount / totalG
+            except ZeroDivisionError:
+                g_xrate = 'NA'
+
+            try:
+                ng_xgrate = ng_xgcount / totalG
+            except ZeroDivisionError:
+                ng_xgrate = 'NA'
 
             try:
                 totalmutrate = totalmut / allnt
@@ -253,10 +263,14 @@ def writeOutput(sampleparams, geneconvs, genecounts, geneid2genename, outfile, u
                 g_trate = '{:.2e}'.format(g_trate)
             if type(g_crate) == float:
                 g_crate = '{:.2e}'.format(g_crate)
+            if type(g_xrate) == float:
+                g_xrate = '{:.2e}'.format(g_xrate)
+            if type(ng_xgrate) == float:
+                ng_xgrate = '{:.2e}'.format(ng_xgrate)
             if type(porc) == np.float64:
                 porc = '{:.3f}'.format(porc)
 
-            outfh.write(('\t').join([gene, genename, str(numreads)] + convcounts + [str(totalG), str(convG), str(convGrate), str(g_trate), str(g_crate), str(porc)]) + '\n')
+            outfh.write(('\t').join([gene, genename, str(numreads)] + convcounts + [str(totalG), str(convG), str(convGrate), str(g_trate), str(g_crate), str(g_xrate), str(ng_xgrate), str(porc)]) + '\n')
 
     
 
