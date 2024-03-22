@@ -461,16 +461,26 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
                 #Check if there is a reference G downstream of this position
                 if read1strand == '+':
                     downstreamrefpos = refpos + 1
-                    downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
-                    downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    #It's possible that downstreamrefpos is not in mergedalignedpairs because this position is at the end of the read
+                    try:
+                        downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
+                        downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    except KeyError:
+                        downstreamrefseq, downstreamqueryseq = None, None
                 elif read1strand == '-':
                     downstreamrefpos = refpos - 1
-                    downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
-                    downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    try:
+                        downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
+                        downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    except KeyError:
+                        downstreamrefseq, downstreamqueryseq = None, None
                     downstreamrefseq = revcomp(downstreamrefseq)
                     downstreamqueryseq = revcomp(downstreamqueryseq)
                 if downstreamrefseq == 'G':
                     conv2 = 'ng_xg'
+                    #If this is a non-g deletion and is downstream of a g, we can't be sure if this deletion is due to this nucleotide or the downstream g
+                    if conv in ['a_x', 't_x', 'c_x']:
+                        conv = None
 
             #Add conv(s) to dictionary
             if r1quality >= minPhred and onlyoverlap == False:
@@ -498,16 +508,24 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
                 #Check if there is a reference G downstream of this position
                 if read1strand == '+':
                     downstreamrefpos = refpos + 1
-                    downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
-                    downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    try:
+                        downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
+                        downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    except KeyError:
+                        downstreamrefseq, downstreamqueryseq = None, None
                 elif read1strand == '-':
                     downstreamrefpos = refpos - 1
-                    downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
-                    downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    try:
+                        downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
+                        downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                    except KeyError:
+                        downstreamrefseq, downstreamqueryseq = None, None
                     downstreamrefseq = revcomp(downstreamrefseq)
                     downstreamqueryseq = revcomp(downstreamqueryseq)
                 if downstreamrefseq == 'G':
                     conv2 = 'ng_xg'
+                    if conv in ['a_x', 't_x', 'c_x']:
+                        conv = None
 
             #Add conv(s) to dictionary
             if r2quality >= minPhred and onlyoverlap == False:
@@ -536,16 +554,24 @@ def getmismatches_pairedend(read1alignedpairs, read2alignedpairs, read1queryseq,
                     #Check if there is a reference G downstream of this position
                     if read1strand == '+':
                         downstreamrefpos = refpos + 1
-                        downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
-                        downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                        try:
+                            downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
+                            downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                        except KeyError:
+                            downstreamrefseq, downstreamqueryseq = None, None
                     elif read1strand == '-':
                         downstreamrefpos = refpos - 1
-                        downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
-                        downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                        try:
+                            downstreamrefseq = mergedalignedpairs[downstreamrefpos][2].upper()
+                            downstreamqueryseq = mergedalignedpairs[downstreamrefpos][4].upper()
+                        except KeyError:
+                            downstreamrefseq, downstreamqueryseq = None, None
                         downstreamrefseq = revcomp(downstreamrefseq)
                         downstreamqueryseq = revcomp(downstreamqueryseq)
                     if downstreamrefseq == 'G':
                         conv2 = 'ng_xg'
+                        if conv in ['a_x', 't_x', 'c_x']:
+                            conv = None
 
                 #Add conv(s) to dictionary
                 #Only do conv2 (ng_xg) if conv is not g_x
