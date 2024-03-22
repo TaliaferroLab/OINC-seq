@@ -8,8 +8,8 @@ import sys
 from snps import getSNPs, recordSNPs
 from maskpositions import readmaskbed
 from getmismatches import iteratereads_pairedend, getmismatches
-from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
-#from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+#from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
 
@@ -57,6 +57,7 @@ if __name__ == '__main__':
     samplenames = args.samplenames.split(',')
     salmonquants = [os.path.join(x, 'salmon', '{0}.quant.sf'.format(x)) for x in samplenames]
     starbams = [os.path.join(x, 'STAR', '{0}Aligned.sortedByCoord.out.bam'.format(x)) for x in samplenames] #non-deduplicated bams
+    #starbams = [os.path.join(x, 'STAR', '{0}.dedup.bam'.format(x)) for x in samplenames]
     postmasterbams = [os.path.join(x, 'postmaster', '{0}.postmaster.bam'.format(x)) for x in samplenames]
 
     #Take in list of control samples, make list of their corresponding star bams for SNP calling
@@ -136,7 +137,7 @@ if __name__ == '__main__':
                                                                 args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
                     convs, readcounter = iterratereads_singleend(
-                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpostions, 'high')
+                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv,
                                       args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
@@ -187,7 +188,7 @@ if __name__ == '__main__':
                                                                 args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
                     convs, readcounter = iterratereads_singleend(
-                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpostions, 'high')
+                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
 
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions,
