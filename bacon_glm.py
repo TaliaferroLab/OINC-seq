@@ -65,7 +65,7 @@ def makePORCdf(samp_conds_file, minreads, considernonG):
             else:
                 genesinall = genesinall.intersection(set(dfgenes))
             
-            columnstokeep = ['GeneID', 'GeneName', 'sample', 'numreads', 'G_Trate', 'G_Crate', 'convGrate', 'porc'] 
+            columnstokeep = ['GeneID', 'GeneName', 'sample', 'numreads', 'G_Trate', 'G_Crate', 'G_Xrate', 'NG_XGrate', 'convGrate', 'porc'] 
             df = df[columnstokeep]
             dfs.append(df)
 
@@ -80,7 +80,7 @@ def makePORCdf(samp_conds_file, minreads, considernonG):
     
     #turn from long into wide
     df = df.pivot_table(index=['GeneID', 'GeneName'], columns='sample', values=[
-                        'numreads', 'G_Trate', 'G_Crate', 'convGrate', 'porc']).reset_index()
+                        'numreads', 'G_Trate', 'G_Crate', 'G_Xrate', 'NG_XGrate', 'convGrate', 'porc']).reset_index()
     #flatten multiindex column names
     df.columns = ["_".join(a) if '' not in a else a[0] for a in df.columns.to_flat_index()]
     
@@ -149,10 +149,6 @@ def calcDeltaPORC(porcdf, sampconds, conditionA, conditionB, metric):
         
     if metric == 'porc':
         porcdf = porcdf.assign(delta_porc = deltametrics)
-    elif metric == 'G_Trate':
-        porcdf = porcdf.assign(delta_G_Trate = deltametrics)
-    elif metric == 'G_Crate':
-        porcdf = porcdf.assign(delta_G_Crate = deltametrics)
     elif metric == 'convGrate':
         porcdf = porcdf.assign(delta_convGrate = deltametrics)
 
@@ -162,18 +158,24 @@ def calcDeltaPORC(porcdf, sampconds, conditionA, conditionB, metric):
 
     return porcdf
 
-def makeContingencyTable(row, use_g_t, use_g_c):
+def makeContingencyTable(row, use_g_t, use_g_c, use_g_x, use_ng_xg):
     #Given a row from a pigpen df, return a contingency table of the form
     #[[convG, nonconvG], [convnonG, nonconvnonG]]
 
-    if use_g_t and use_g_c:
-        convG = row['g_t'] + row['g_c']
-    elif use_g_t and not use_g_c:
-        convG = row['g_t']
-    elif use_g_c and not use_g_t:
-        convG = row['g_c']
+    #Identity of converted Gs depends on which ones you want to count
+    possibleconvs = ['g_t', 'g_c', 'g_x', 'ng_xg']
+    possibleoptions = [use_g_t, use_g_c, use_g_x, use_ng_xg]
+    selectedconvs = []
+    for ind, option in enumerate(possibleoptions):
+        if option == True:
+            selectedconvs.append(possibleconvs[ind])
+
+    convG = 0
+    for conv in selectedconvs:
+        convG += row[conv]
+        
     nonconvG = row['g_g']
-    convnonG = row['a_t'] + row['a_c'] + row['a_g'] + row['c_a'] + row['c_t'] + row['c_g'] + row['t_a'] + row['t_c'] + row['t_g']
+    convnonG = row['a_t'] + row['a_c'] + row['a_g'] + row['a_x'] + row['c_a'] + row['c_t'] + row['c_g'] + row['c_x'] + row['t_a'] + row['t_c'] + row['t_g'] + row['t_x']
     nonconvnonG = row['c_c'] + row['t_t'] + row['a_a']
 
     conttable = [[convG, nonconvG], [convnonG, nonconvnonG]]
@@ -293,7 +295,7 @@ def multihyp(pvalues):
     return correctedps
 
 
-def getpvalues(samp_conds_file, conditionA, conditionB, considernonG, filteredgenes, use_g_t, use_g_c):
+def getpvalues(samp_conds_file, conditionA, conditionB, considernonG, filteredgenes, use_g_t, use_g_c, use_g_x, use_ng_xg):
     #each contingency table will be: [[convG, nonconvG], [convnonG, nonconvnonG]]
     #These will be stored in a dictionary: {gene : [condAtables, condBtables]}
     conttables = {}
@@ -312,7 +314,7 @@ def getpvalues(samp_conds_file, conditionA, conditionB, considernonG, filteredge
             condition = line[2]
             df = pd.read_csv(pigpenfile, sep = '\t', index_col = False, header=0, comment = '#')
             for idx, row in df.iterrows():
-                conttable = makeContingencyTable(row, use_g_t, use_g_c)
+                conttable = makeContingencyTable(row, use_g_t, use_g_c, use_g_x, use_ng_xg)
                 gene = row['GeneID']
                 #If this isn't one of the genes that passes read count filters in all files, skip it
                 if gene not in filteredgenes:
@@ -377,8 +379,10 @@ if __name__ == '__main__':
                         help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
     parser.add_argument('--conditionB', type=str,
                         help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
-    parser.add_argument('--use_g_t', help = 'Consider G to T mutations when calculating G conversion rate?', action = 'store_true')
-    parser.add_argument('--use_g_c', help = 'Consider G to C mutations when calculating G conversion rate?', action = 'store_true')
+    parser.add_argument('--use_g_t', help = 'Consider G to T mutations in contingency table?', action = 'store_true')
+    parser.add_argument('--use_g_c', help = 'Consider G to C mutations in contingency table?', action = 'store_true')
+    parser.add_argument('--use_g_x', help = 'Consider G to deletion mutations in contingency table?', action = 'store_true')
+    parser.add_argument('--use_ng_xg', help = 'Consider NG to deletionG mutations in contingency table?', action = 'store_true')
     parser.add_argument('--considernonG',
                         help='Consider conversions of nonG residues to normalize for overall mutation rate?', action = 'store_true')
     parser.add_argument('--output', type = str, help = 'Output file.')
@@ -392,13 +396,8 @@ if __name__ == '__main__':
     #What metric should we care about?
     if args.considernonG:
         metric = 'porc'
-    elif args.use_g_t and not args.use_g_c:
-        metric = 'G_Trate'
-    elif args.use_g_c and not args.use_g_t:
-        metric = 'G_Crate'
-    elif args.use_g_t and args.use_g_c:
-        metric = 'convGrate'
-    
+    else:
+        metric = 'convGrate' #what goes into this rate is set in the corresponding pigpen run
     
     #Make df of PORC values
     porcdf = makePORCdf(args.sampconds, args.minreads, args.considernonG)
@@ -406,7 +405,7 @@ if __name__ == '__main__':
     porcdf = calcDeltaPORC(porcdf, args.sampconds, args.conditionA, args.conditionB, metric)
     filteredgenes = porcdf['GeneID'].tolist()
     #Get p values and corrected p values
-    pdf = getpvalues(args.sampconds, args.conditionA, args.conditionB, args.considernonG, filteredgenes, args.use_g_t, args.use_g_c)
+    pdf = getpvalues(args.sampconds, args.conditionA, args.conditionB, args.considernonG, filteredgenes, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg)
     #add p values and FDR
     porcdf = pd.merge(porcdf, pdf, on = ['GeneID'])
     #Format floats
