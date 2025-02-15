@@ -8,7 +8,6 @@ import sys
 from snps import getSNPs, recordSNPs
 from maskpositions import readmaskbed
 from getmismatches import iteratereads_pairedend, getmismatches
-#from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
@@ -19,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--samplenames', type = str, help = 'Comma separated list of samples to quantify.', required = True)
     parser.add_argument('--controlsamples', type = str, help = 'Comma separated list of control samples (i.e. those where no *induced* conversions are expected). May be a subset of samplenames. Required if SNPs are to be considered and a snpfile is not supplied.')
     parser.add_argument('--gff', type = str, help = 'Genome annotation in gff format.')
+    parser.add_argument('--gfftype', type = str, help = 'Source of genome annotation file.', choices = ['GENCODE', 'Ensembl'], required = True)
     parser.add_argument('--genomeFasta', type = str, help = 'Genome sequence in fasta format. Required if SNPs are to be considered.')
     parser.add_argument('--nproc', type = int, help = 'Number of processors to use. Default is 1.', default = 1)
     parser.add_argument('--useSNPs', action = 'store_true', help = 'Consider SNPs?')
@@ -39,6 +39,12 @@ if __name__ == '__main__':
     parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for those conversions to be counted. Default is 1.', default = 1)
     parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
     args = parser.parse_args()
+
+    #What type of gff are we working with?
+    if args.gfftype == 'GENCODE':
+        from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+    elif args.gfftype == 'Ensembl':
+        from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 
     #If we have single end data, considering overlap of paired reads or only one read doesn't make sense
     if args.datatype == 'single':
