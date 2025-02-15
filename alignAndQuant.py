@@ -228,7 +228,8 @@ if __name__ == '__main__':
     os.chdir(sampledir)
 
     runSTAR(r1, r2, nthreads, STARindex, samplename)
-    filterbam(samplename, maxmap)
+    if maxmap:
+        filterbam(samplename, maxmap)
 
     #aligned read files
     alignedr1 = samplename + '.aligned.r1.fq.gz'
