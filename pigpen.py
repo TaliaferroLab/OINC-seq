@@ -8,7 +8,6 @@ import sys
 from snps import getSNPs, recordSNPs
 from maskpositions import readmaskbed
 from getmismatches import iteratereads_pairedend, getmismatches
-from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
 
@@ -78,8 +77,8 @@ if __name__ == '__main__':
             controlsamplebams.append(starbams[ind])
 
     #We have to be either looking for G->T or G->C, if not both
-    if not args.use_g_t and not args.use_g_c:
-        print('We have to either be looking for G->T or G->C, if not both! Add argument --use_g_t and/or --use_g_c.')
+    if not args.use_g_t and not args.use_g_c and not args.use_g_x:
+        print('We have to either be looking for G->T or G->C or G->del, if not both! Add argument --use_g_t and/or --use_g_c and/or --use_g_x.')
         sys.exit()
 
     #We have to be using either read1 or read2 if not both
