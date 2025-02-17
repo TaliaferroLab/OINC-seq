@@ -1,4 +1,5 @@
-from distutils.core import setup
+#from distutils.core import setup
+from setuptools import setup, find_packages
 setup(name = 'pigpen',
 description = 'Pipeline for the Identification of Guanosine Positions Erroneously Notated',
 author = 'Matthew Taliaferro',
