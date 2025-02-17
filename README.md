@@ -16,7 +16,7 @@
 
 ## Overview
 
-OINC-seq (Oxidation-Induced Nucleotide Conversion sequencing) is a sequencing technology that allows the direction of oxidative marks on RNA molecules. Because guanosine has the lowest redox potential of any of the ribonucleosides, it is the one most likely to be affected by oxidation. When this occurs, guanosine is turned into 8-oxoguanosine (8-OG). A previous [study](https://pubs.acs.org/doi/10.1021/acs.biochem.7b00730) found that when reverse transcriptase encounters guanosine oxidation products, it can misinterpret 8-OG as either T or C. Therefore, to detect these oxidative marks, one can look for G -> T and G -> C conversions in RNAseq data.
+[OINC-seq](https://www.biorxiv.org/content/10.1101/2024.11.12.623278v1.abstract) (Oxidation-Induced Nucleotide Conversion sequencing) is a sequencing technology that allows the direction of oxidative marks on RNA molecules. Because guanosine has the lowest redox potential of any of the ribonucleosides, it is the one most likely to be affected by oxidation. When this occurs, guanosine is turned into 8-oxoguanosine (8-OG) or further oxidized products. When reverse transcriptase encounters these products, it makes predictable errors in the resulting cDNA (see [here](https://pmc.ncbi.nlm.nih.gov/articles/PMC5623583/)). OINC-seq employs spatially restricted singlet oxygen radicals to oxidize RNAs at specific subcellular locations. The level of RNA oxidation detected for each RNA species is therefore a readout of the amount of that RNA species at that subcellular location. 
 
 To detect and quantify these conversions, we have created software called **PIGPEN** (Pipeline for Identification of Guanosine Positions Erroneously Notated).
 
@@ -41,6 +41,7 @@ PIGPEN has the following prerequisites:
 - pandas >= 1.3.5
 - bamtools >= 2.5.2
 - salmon >= 1.9.0
+- STAR >= 2.7.10
 - gffutils >= 0.11.0
 - umi_tools >= 1.1.0 (if UMI collapsing is desired)
 - [postmaster](https://github.com/COMBINE-lab/postmaster)
@@ -56,7 +57,7 @@ BACON has the following prerequisites:
 
 ## Installation
 
-For now, installation can be done by cloning this repository. As PIPGEN matures, we will work towards getting this package on [bioconda](https://bioconda.github.io/).
+Installation can be done by cloning this repository. Alternatively PIGPEN can be installed using [bioconda](https://bioconda.github.io/). In either case, `postmaster` must be installed separately afterward. This can be done using `cargo install --git https://github.com/COMBINE-lab/postmaster`
 
 ## Preparing alignment files
 
@@ -138,7 +139,7 @@ After PIGPEN calculates the number of converted and noncoverted nucleotides in e
 
 We have observed that the overall rate of conversions (not just G -> T + G -> C, but all conversions) can vary signficantly from sample to sample, presumably due to a technical effect in library preparation. For this reason, PIGPEN calculates **PORC** (Proportion of Relevant Conversions) values. This is the log2 ratio of the relevant conversion rate ([G -> T + G -> C] / total number of reference G encountered) to the overall conversion rate (total number of all conversions / total number of positions interrogated). PORC therefore normalizes to the overall rate of conversions, removing this technical effect.
 
-PIGPEN can use G -> T conversions, G -> C conversions, or both when calculating PORC values. This behavior is controlled by supplying the options `--use_g_t` and `--use_g_c`. To consider both types of conversions, supply both flags.
+PIGPEN can use G -> T conversions, G -> C conversions, G deletions, or any combination when calculating PORC values. This behavior is controlled by supplying some or all of the options `--use_g_t`, `--use_g_c`, and `--use_g_x`, respectively.
 
 ## Using one read of a paired end sample
 
