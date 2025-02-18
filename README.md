@@ -38,6 +38,7 @@ PIGPEN has the following prerequisites:
 - bcftools >= 1.15
 - pysam >= 0.19
 - numpy >= 1.21
+- pybedtools >= 0.9.0
 - pandas >= 1.3.5
 - bamtools >= 2.5.2
 - salmon >= 1.9.0
