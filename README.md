@@ -58,7 +58,7 @@ BACON has the following prerequisites:
 
 ## Installation
 
-Installation can be done by cloning this repository. Alternatively PIGPEN can be installed using [bioconda](https://bioconda.github.io/). In either case, `postmaster` must be installed separately afterward. This can be done using `cargo install --git https://github.com/COMBINE-lab/postmaster`
+Installation can be done by cloning this repository. Alternatively PIGPEN can be installed using [bioconda](https://bioconda.github.io/) using `conda install -c bioconda pigpen`. Following installation using `conda`, PIPGEN is accessible by calling `pigpen`, e.g. `pigpen -h`. In either case, `postmaster` must be installed separately afterward. This can be done using `cargo install --git https://github.com/COMBINE-lab/postmaster`. If PIPGEN was installed via `conda`, make sure to install postmaster in the same environment.
 
 ## Preparing alignment files
 
