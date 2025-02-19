@@ -7,11 +7,11 @@ import argparse
 import subprocess
 import os
 import sys
-from snps import getSNPs, recordSNPs
-from maskpositions import readmaskbed
-from getmismatches import iteratereads_pairedend, getmismatches
-from assignreads import getReadOverlaps, processOverlaps
-from conversionsPerGene import getPerGene, writeConvsPerGene
+from pigpen.snps import getSNPs, recordSNPs
+from pigpen.maskpositions import readmaskbed
+from pigpen.getmismatches import iteratereads_pairedend, getmismatches
+from pigpen.assignreads import getReadOverlaps, processOverlaps
+from pigpen.conversionsPerGene import getPerGene, writeConvsPerGene
 
 
 parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
