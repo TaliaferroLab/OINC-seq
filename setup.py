@@ -8,4 +8,4 @@ url = 'https://github.com/TaliaferroLab/OINC-seq',
 version = '0.0.2',
 packages = find_packages(where = './src', exclude = ['workflow', 'testdata']),
 package_dir = {'':'src'},
-entry_points = {'console_scripts': ['pigpen = runpigpen:main']})
+entry_points = {'console_scripts': ['pigpen = pigpen:runpigpen.main']})
