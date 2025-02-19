@@ -7,4 +7,5 @@ author_email = 'taliaferrojm@gmail.com',
 url = 'https://github.com/TaliaferroLab/OINC-seq',
 version = '0.0.2',
 packages = find_packages(where = './src', exclude = ['workflow', 'testdata']),
-package_dir = {'':'src'})
+package_dir = {'':'src'},
+entry_points = {'console_scripts': ['pigpen = pigpen:main']})

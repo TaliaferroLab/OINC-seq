@@ -13,33 +13,36 @@ from getmismatches import iteratereads_pairedend, getmismatches
 from assignreads import getReadOverlaps, processOverlaps
 from conversionsPerGene import getPerGene, writeConvsPerGene
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--datatype', type = str, choices = ['single', 'paired'], required = True, help = 'Single end or paired end data?')
-    parser.add_argument('--samplenames', type = str, help = 'Comma separated list of samples to quantify.', required = True)
-    parser.add_argument('--controlsamples', type = str, help = 'Comma separated list of control samples (i.e. those where no *induced* conversions are expected). May be a subset of samplenames. Required if SNPs are to be considered and a snpfile is not supplied.')
-    parser.add_argument('--gff', type = str, help = 'Genome annotation in gff format.')
-    parser.add_argument('--gfftype', type = str, help = 'Source of genome annotation file.', choices = ['GENCODE', 'Ensembl'], required = True)
-    parser.add_argument('--genomeFasta', type = str, help = 'Genome sequence in fasta format. Required if SNPs are to be considered.')
-    parser.add_argument('--nproc', type = int, help = 'Number of processors to use. Default is 1.', default = 1)
-    parser.add_argument('--useSNPs', action = 'store_true', help = 'Consider SNPs?')
-    parser.add_argument('--snpfile', type = str, help = 'VCF file of snps to mask. If --useSNPs but a --snpfile is not supplied, a VCF of snps will be created using --controlsamples.')
-    parser.add_argument('--maskbed', help = 'Optional. Bed file of positions to mask from analysis.', default = None)
-    parser.add_argument('--ROIbed', help = 'Optional. Bed file of specific regions of interest in which to quantify conversions. If supplied, only conversions in these regions will be quantified.', default = None)
-    parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
-    parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.4', default = 0.4)
-    parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair? Only possible with paired end data.')
-    parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
-    parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
-    parser.add_argument('--use_g_x', action='store_true', help='Consider G->deletion conversions?')
-    parser.add_argument('--use_ng_xg', action='store_true', help='Consider NG->deletionG conversions?')
-    parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions? Only useful with paired end data.')
-    parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions? Only useful with paired end data.')
-    parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting. STAR unique mappers have MAPQ 255.', required = True)
-    parser.add_argument('--minPhred', type = int, help = 'Minimum phred quality score for a base to be considered. Default = 30', default = 30)
-    parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for those conversions to be counted. Default is 1.', default = 1)
-    parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
-    args = parser.parse_args()
+
+parser = argparse.ArgumentParser(description='                    ,-,-----,\n    PIGPEN     **** \\ \\ ),)`-\'\n              <`--\'> \\ \\` \n              /. . `-----,\n    OINC! >  (\'\')  ,      @~\n              `-._,  ___  /\n-|-|-|-|-|-|-|-| (( /  (( / -|-|-| \n|-|-|-|-|-|-|-|- \'\'\'   \'\'\' -|-|-|-\n-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|\n\n   Pipeline for Identification \n      Of Guanosine Positions\n       Erroneously Notated', formatter_class = argparse.RawDescriptionHelpFormatter)
+parser.add_argument('--datatype', type = str, choices = ['single', 'paired'], required = True, help = 'Single end or paired end data?')
+parser.add_argument('--samplenames', type = str, help = 'Comma separated list of samples to quantify.', required = True)
+parser.add_argument('--controlsamples', type = str, help = 'Comma separated list of control samples (i.e. those where no *induced* conversions are expected). May be a subset of samplenames. Required if SNPs are to be considered and a snpfile is not supplied.')
+parser.add_argument('--gff', type = str, help = 'Genome annotation in gff format.')
+parser.add_argument('--gfftype', type = str, help = 'Source of genome annotation file.', choices = ['GENCODE', 'Ensembl'], required = True)
+parser.add_argument('--genomeFasta', type = str, help = 'Genome sequence in fasta format. Required if SNPs are to be considered.')
+parser.add_argument('--nproc', type = int, help = 'Number of processors to use. Default is 1.', default = 1)
+parser.add_argument('--useSNPs', action = 'store_true', help = 'Consider SNPs?')
+parser.add_argument('--snpfile', type = str, help = 'VCF file of snps to mask. If --useSNPs but a --snpfile is not supplied, a VCF of snps will be created using --controlsamples.')
+parser.add_argument('--maskbed', help = 'Optional. Bed file of positions to mask from analysis.', default = None)
+parser.add_argument('--ROIbed', help = 'Optional. Bed file of specific regions of interest in which to quantify conversions. If supplied, only conversions in these regions will be quantified.', default = None)
+parser.add_argument('--SNPcoverage', type = int, help = 'Minimum coverage to call SNPs. Default = 20', default = 20)
+parser.add_argument('--SNPfreq', type = float, help = 'Minimum variant frequency to call SNPs. Default = 0.4', default = 0.4)
+parser.add_argument('--onlyConsiderOverlap', action = 'store_true', help = 'Only consider conversions seen in both reads of a read pair? Only possible with paired end data.')
+parser.add_argument('--use_g_t', action = 'store_true', help = 'Consider G->T conversions?')
+parser.add_argument('--use_g_c', action = 'store_true', help = 'Consider G->C conversions?')
+parser.add_argument('--use_g_x', action='store_true', help='Consider G->deletion conversions?')
+parser.add_argument('--use_ng_xg', action='store_true', help='Consider NG->deletionG conversions?')
+parser.add_argument('--use_read1', action = 'store_true', help = 'Use read1 when looking for conversions? Only useful with paired end data.')
+parser.add_argument('--use_read2', action = 'store_true', help = 'Use read2 when looking for conversions? Only useful with paired end data.')
+parser.add_argument('--minMappingQual', type = int, help = 'Minimum mapping quality for a read to be considered in conversion counting. STAR unique mappers have MAPQ 255.', required = True)
+parser.add_argument('--minPhred', type = int, help = 'Minimum phred quality score for a base to be considered. Default = 30', default = 30)
+parser.add_argument('--nConv', type = int, help = 'Minimum number of required G->T and/or G->C conversions in a read pair in order for those conversions to be counted. Default is 1.', default = 1)
+parser.add_argument('--outputDir', type = str, help = 'Output directory.', required = True)
+args = parser.parse_args()
+
+def main():
+    #Run script from an entry point
 
     #What type of gff are we working with?
     if args.gfftype == 'GENCODE':
@@ -52,7 +55,7 @@ if __name__ == '__main__':
         args.onlyConsiderOverlap = False
         args.use_read1 = False
         args.use_read2 = False
-    
+
     #Store command line arguments
     suppliedargs = {}
     for arg in vars(args):
@@ -147,7 +150,7 @@ if __name__ == '__main__':
                         samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv,
-                                      args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
+                                        args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
 
             print('Getting posterior probabilities from salmon alignment file...')
             postmasterbam = postmasterbams[ind]
@@ -199,7 +202,7 @@ if __name__ == '__main__':
 
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions,
-                                      args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
+                                        args.nConv, args.minMappingQual, args.nproc, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.use_read1, args.use_read2, args.minPhred)
 
             print('Assigning reads to genes in supplied bed file...')
             overlaps, numpairs = getReadOverlaps(samplebam, args.ROIbed, 'chrsort.txt')
@@ -209,3 +212,6 @@ if __name__ == '__main__':
                 os.mkdir(args.outputDir)
             outputfile = os.path.join(args.outputDir, sample + '.pigpen.txt')
             writeConvsPerGene(sampleparams, numreadspergene, convsPerGene, outputfile, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg)
+
+if __name__ == '__main__':
+    main()
