@@ -124,7 +124,7 @@ PIGPEN performs this by using [varscan](http://varscan.sourceforge.net/using-var
 PIGPEN performs this SNP calling on control samples (`--controlsamples`) in which the intended oxidation did not occur. PIGPEN will use the union of all SNPs found in these files for masking. Whether or not to call SNPs at all (you probably should) is controlled by `--useSNPs`.
 
 
-##GFFtype
+## GFFtype
 
 PIGPEN uses genome annotations to relate transcripts and genes. There are peculiarities to these annotations based on where they came from. Generally, PIGPEN prefers annotation files from either [GENCODE](www.gencodegenes.org) or [Ensembl](https://www.ensembl.org/index.html). Tell PIGPEN where your annotation came from using the --gfftype flag.
 
