@@ -9,7 +9,7 @@ import os
 import sys
 from pigpen.snps import getSNPs, recordSNPs
 from pigpen.maskpositions import readmaskbed
-from pigpen.getmismatches import iteratereads_pairedend, getmismatches
+from pigpen.getmismatches import iteratereads_singleend, iteratereads_pairedend, getmismatches
 from pigpen.assignreads import getReadOverlaps, processOverlaps
 from pigpen.conversionsPerGene import getPerGene, writeConvsPerGene
 
@@ -146,7 +146,7 @@ def main():
                     convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg,
                                                                 args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
-                    convs, readcounter = iterratereads_singleend(
+                    convs, readcounter = iteratereads_singleend(
                         samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions, args.nConv,
@@ -197,7 +197,7 @@ def main():
                     convs, readcounter = iteratereads_pairedend(samplebam, args.onlyConsiderOverlap, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg,
                                                                 args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
-                    convs, readcounter = iterratereads_singleend(
+                    convs, readcounter = iteratereads_singleend(
                         samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
 
             elif args.nproc > 1:
