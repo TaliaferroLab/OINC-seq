@@ -46,9 +46,9 @@ def main():
 
     #What type of gff are we working with?
     if args.gfftype == 'GENCODE':
-        from assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+        from pigpen.assignreads_salmon import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
     elif args.gfftype == 'Ensembl':
-        from assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
+        from pigpen.assignreads_salmon_ensembl import getpostmasterassignments, assigntotxs, collapsetogene, readspergene, writeOutput
 
     #If we have single end data, considering overlap of paired reads or only one read doesn't make sense
     if args.datatype == 'single':
