@@ -22,6 +22,27 @@ from rpy2.rinterface_lib.callbacks import logger as rpy2_logger
 import logging
 import warnings
 import argparse
+utils = importr('utils')
+lme4 = importr('lme4')
+base = importr('base')
+stats = importr('stats')
+
+parser = argparse.ArgumentParser(description = 'BACON: A framework for analyzing pigpen outputs.')
+parser.add_argument('--sampconds', type=str,
+                    help='3 column, tab delimited file. Column names must be \'file\', \'sample\', and \'condition\'. See README for more details.')
+parser.add_argument('--minreads', type = int, help = 'Minimum read count for a gene to be considered in a sample.', default = 100)
+parser.add_argument('--conditionA', type=str,
+                    help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
+parser.add_argument('--conditionB', type=str,
+                    help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
+parser.add_argument('--use_g_t', help = 'Consider G to T mutations in contingency table?', action = 'store_true')
+parser.add_argument('--use_g_c', help = 'Consider G to C mutations in contingency table?', action = 'store_true')
+parser.add_argument('--use_g_x', help = 'Consider G to deletion mutations in contingency table?', action = 'store_true')
+parser.add_argument('--use_ng_xg', help = 'Consider NG to deletionG mutations in contingency table?', action = 'store_true')
+parser.add_argument('--considernonG',
+                    help='Consider conversions of nonG residues to normalize for overall mutation rate?', action = 'store_true')
+parser.add_argument('--output', type = str, help = 'Output file.')
+args = parser.parse_args()
 
 #Need r-base, r-stats, r-lme4
 
@@ -365,29 +386,7 @@ def formatporcdf(porcdf):
 
     return porcdf
 
-if __name__ == '__main__':
-    utils = importr('utils')
-    lme4 = importr('lme4')
-    base = importr('base')
-    stats = importr('stats')
-
-    parser = argparse.ArgumentParser(description = 'BACON: A framework for analyzing pigpen outputs.')
-    parser.add_argument('--sampconds', type=str,
-                        help='3 column, tab delimited file. Column names must be \'file\', \'sample\', and \'condition\'. See README for more details.')
-    parser.add_argument('--minreads', type = int, help = 'Minimum read count for a gene to be considered in a sample.', default = 100)
-    parser.add_argument('--conditionA', type=str,
-                        help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
-    parser.add_argument('--conditionB', type=str,
-                        help='One of the two conditions in the \'condition\' column of sampconds. Deltaporc is defined as conditionB - conditionA.')
-    parser.add_argument('--use_g_t', help = 'Consider G to T mutations in contingency table?', action = 'store_true')
-    parser.add_argument('--use_g_c', help = 'Consider G to C mutations in contingency table?', action = 'store_true')
-    parser.add_argument('--use_g_x', help = 'Consider G to deletion mutations in contingency table?', action = 'store_true')
-    parser.add_argument('--use_ng_xg', help = 'Consider NG to deletionG mutations in contingency table?', action = 'store_true')
-    parser.add_argument('--considernonG',
-                        help='Consider conversions of nonG residues to normalize for overall mutation rate?', action = 'store_true')
-    parser.add_argument('--output', type = str, help = 'Output file.')
-    args = parser.parse_args()
-
+def main():
     #Considering nonG conversions uses porc values in which both g_t and g_c conversions have already been included
     if not args.use_g_t and not args.use_g_c and not args.considernonG:
         print('ERROR: we must either count G to T or G to C mutations (or both) or consider nonG conversions.')
@@ -412,4 +411,7 @@ if __name__ == '__main__':
     porcdf = formatporcdf(porcdf)
 
     porcdf.to_csv(args.output, sep = '\t', index = False)
+
+if __name__ == '__main__':
+    main()
 
