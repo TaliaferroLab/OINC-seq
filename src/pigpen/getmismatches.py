@@ -33,7 +33,7 @@ def revcomp(nt):
     return nt_rc
 
 
-def iteratereads_singleend(bam, use_g_t, use_g_c, nConv, minMappingQual, snps = None, maskpositions = None, verbosity = 'high'):
+def iteratereads_singleend(bam, use_g_t, use_g_c, use_g_x, use_ng_xg, nConv, minMappingQual, minPhred=30, snps = None, maskpositions = None, verbosity = 'high'):
     #Read through a bam containing single end reads (or if it contains paired end reads, just use read 1)
     #Find nt conversion locations for each read.
     #Store the number of each conversion for each read in a dictionary.
@@ -47,7 +47,7 @@ def iteratereads_singleend(bam, use_g_t, use_g_c, nConv, minMappingQual, snps = 
         if verbosity == 'high':
             print('Finding nucleotide conversions in {0}...'.format(os.path.basename(bam)))
         for read in infh.fetch(until_eof = True):
-            if read.is_secondary or read.is_supplementary or read.is_unmapped or read.mapping_quality < minMappingQual:
+            if read.is_read2 or read.is_secondary or read.is_supplementary or read.is_unmapped or read.mapping_quality < minMappingQual:
                 continue
             readcounter +=1
             if readcounter % 10000000 == 0:
@@ -57,7 +57,7 @@ def iteratereads_singleend(bam, use_g_t, use_g_c, nConv, minMappingQual, snps = 
             queryname = read.query_name
             queryseq = read.query_sequence #this is always on the + strand, no matter what strand the read maps to
             chrm = read.reference_name
-            qualities = list(read.query_qualities)
+            qualities = list(read.query_qualities) #phred scores
 
             #Get a set of snp locations if we have them
             if snps:
@@ -94,7 +94,7 @@ def iteratereads_singleend(bam, use_g_t, use_g_c, nConv, minMappingQual, snps = 
 
             alignedpairs = read.get_aligned_pairs(with_seq = True)
             readqualities = list(read.query_qualities)
-            convs_in_read = getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, masklocations, nConv, use_g_t, use_g_c)
+            convs_in_read = getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, masklocations, nConv, minPhred, use_g_t, use_g_c, use_g_x, use_ng_xg)
             
             convs[queryname] = convs_in_read
 
@@ -105,7 +105,7 @@ def iteratereads_singleend(bam, use_g_t, use_g_c, nConv, minMappingQual, snps = 
     return convs, readcounter
                 
 
-def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, masklocations, nConv, use_g_t, use_g_c):
+def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, masklocations, nConv, minPhred, use_g_t, use_g_c, use_g_x, use_ng_xg):
     #remove tuples that have None
     #These are either intronic or might have been soft-clipped
     #Tuples are (querypos, (0-based) refpos, refsequence)
@@ -116,21 +116,23 @@ def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, maskl
 
     #masklocations is a set of chrm_coord locations. At these locations, all queries will be treated as not having a conversion
 
-    #remove positions where querypos is None
-    #i'm pretty sure these query positions won't have quality scores
-    alignedpairs = [x for x in alignedpairs if x[0] != None]
+    #For now, forget insertions. Get rid of any position where reference position is None
+    alignedpairs = [x for x in alignedpairs if x[1] != None]
+    alignedpairs = [x for x in alignedpairs if x[2] != None]
 
     #Add quality scores to alignedpairs tuples
-    #will now be (querypos, refpos, refseqeunce, qualityscore)
-    ap_withq = []
-    for ind, x in enumerate(alignedpairs):
-        x += (readqualities[ind],)
-        ap_withq.append(x)
-    alignedpairs = ap_withq
-
-    #Now remove positions where refsequence is None
-    #These may be places that got soft-clipped
-    alignedpairs = [x for x in alignedpairs if None not in x]
+    #will now be (querypos, refpos, refseqeunce, querysequence, qualscore)
+    for x in range(len(alignedpairs)):
+        alignedpair = alignedpairs[x]
+        querypos = alignedpair[0]
+        if querypos != None:
+            querynt = queryseq[querypos]
+            qualscore = readqualities[querypos]
+        elif querypos == None:
+            querynt = 'X' #there is no query nt for a deletion
+            qualscore = 37 #there's no query position here, so make up a quality score
+        alignedpair = alignedpair + (querynt, qualscore)
+        alignedpairs[x] = alignedpair
 
     #if we have locations to mask, remove their locations from alignedpairs
     #masklocations is a set of 0-based coordinates of snp locations to mask
@@ -143,39 +145,90 @@ def getmismatches_singleend(alignedpairs, queryseq, readqualities, strand, maskl
         'a_a', 'a_t', 'a_c', 'a_g', 'a_n',
         'g_a', 'g_t', 'g_c', 'g_g', 'g_n',
         'c_a', 'c_t', 'c_c', 'c_g', 'c_n',
-        't_a', 't_t', 't_c', 't_g', 't_n']
+        't_a', 't_t', 't_c', 't_g', 't_n',
+        'a_x', 'g_x', 'c_x', 't_x', 'ng_xg']
 
     #initialize dictionary
     for conv in possibleconvs:
         convs[conv] = 0
 
-    for alignedpair in alignedpairs:
-        refnt = alignedpair[2]
-        
-        #if reference is N, skip this position
-        if refnt == 'N' or refnt == 'n':
-            continue
+    #Reorganize alignedpairs (which is currently list of tuples) into a dict
+    #alignedpair = (querypos, refpos, refsequence, querysequence, qualscore)
+    r1dict = {} #{reference position: [queryposition, reference sequence, querysequence, quality]}
+    for x in alignedpairs:
+        r1dict[int(x[1])] = [x[0], x[2].upper(), x[3].upper(), x[4]]
+
+    #Now go through r1dict, looking for conversions.
+    #We are now keeping track of deletions as either g_x (reference G, query deletion) or ng_xg (ref nt 5' of G deleted in query)
+    #We have observed that sometimes RT skips the nucleotide *after* an oxidized G (after being from the RT's point of view)
+
+    for refpos in r1dict:
+        conv = None
+        conv2 = None #sometimes we can have 2 convs (for example the first nt of ng_xg could be both g_x and ng_xg)
+        querypos = r1dict[refpos][0]
+        refseq = r1dict[refpos][1]
+        queryseq = r1dict[refpos][2]
+        qualscore = r1dict[refpos][3]
 
         if strand == '-':
-            refnt = revcomp(refnt)
+            #refseq needs to equal the sense strand (it is always initially defined as the + strand). read1 is always the sense strand.
+            refseq = revcomp(refseq)
+        
+        #If reference is N, skip this position
+        if refseq == 'N' or refseq == 'n':
+            continue
+        conv = refseq.lower() + '_' + queryseq.lower()
 
-        #Not a conversion
-        if refnt.isupper():
-            conv = refnt.lower() + '_' + refnt.lower()
-        #Is a conversion
-        elif refnt.islower():
-            querynt = queryseq[alignedpair[0]]
-            if strand == '-':
-                querynt = revcomp(querynt)
-            conv = refnt.lower() + '_' + querynt.lower()
+        if queryseq == 'X':
+            #Check if there is a reference G downstream of this position
+            if strand == '+':
+                downstreamrefpos = refpos + 1
+                #It's possible that downstreamrefpos is not in mergedalignedpairs because this position is at the end of the read
+                try:
+                    downstreamrefseq = r1dict[downstreamrefpos][1].upper()
+                    downstreamqueryseq = r1dict[downstreamrefpos][2].upper()
+                except KeyError:
+                    downstreamrefseq, downstreamqueryseq = None, None
+            elif strand == '-':
+                downstreamrefpos = refpos - 1
+                try:
+                    downstreamrefseq = r1dict[downstreamrefpos][1].upper()
+                    downstreamqueryseq = r1dict[downstreamrefpos][2].upper()
+                except KeyError:
+                    downstreamrefseq, downstreamqueryseq = None, None
+                downstreamrefseq = revcomp(downstreamrefseq)
+                downstreamqueryseq = revcomp(downstreamqueryseq)
+            if downstreamrefseq == 'G':
+                conv2 = 'ng_xg'
+                #If this is a non-g deletion and is downstream of a g, we can't be sure if this deletion is due to this nucleotide or the downstream g
+                if conv in ['a_x', 't_x', 'c_x']:
+                    conv = None
 
-        #If the quality at this position passes threshold, record the conversion.
-        #Otherwise, skip it.
-        qscore = alignedpair[3]
-        if qscore >= 30: #can change this later
-            convs[conv] +=1
-        else:
-            pass
+        #Add conv(s) to dictionary
+        #Only do conv2 (ng_xg) if conv in not g_x
+        if qualscore >= minPhred:
+            if conv in convs:
+                convs[conv] +=1
+            if conv2 == 'ng_xg' and conv != 'g_x':
+                convs[conv2] +=1
+
+    #Does the number of relevant conversions meet our threshold?
+    allconvs = ['g_c', 'g_t', 'g_x', 'ng_xg']
+    convoptions = [use_g_c, use_g_t, use_g_x, use_ng_xg]
+    selectedconvs = []
+    for ind, x in enumerate(allconvs):
+        if convoptions[ind] == True:
+            selectedconvs.append(x)
+    if not selectedconvs:
+        print('ERROR: we must be looking for at least one conversion type.')
+        sys.exit()
+
+    nConv_in_read = 0
+    for x in selectedconvs:
+        nConv_in_read += convs[x]
+    if nConv_in_read < nConv:
+        for x in allconvs:
+            convs[x] = 0
 
     return convs
 
@@ -735,7 +788,7 @@ def getmismatches(datatype, bam, onlyConsiderOverlap, snps, maskpositions, nConv
             argslist.append((x, bool(onlyConsiderOverlap), bool(
                 use_g_t), bool(use_g_c), bool(use_g_x), bool(use_ng_xg), bool(use_read1), bool(use_read2), nConv, minMappingQual, minPhred, snps, maskpositions, 'low'))
         elif datatype == 'single':
-            argslist.append((x, bool(use_g_t), bool(use_g_c), nConv, minMappingQual, snps, maskpositions, 'low'))
+            argslist.append((x, bool(use_g_t), bool(use_g_c), bool(use_g_x), bool(use_ng_xg), nConv, minMappingQual, minPhred, snps, maskpositions, 'low'))
 
     #items returned from iteratereads_pairedend are in a list, one per process
     totalreadcounter = 0 #number of reads across all the split bams
@@ -771,7 +824,8 @@ def getmismatches(datatype, bam, onlyConsiderOverlap, snps, maskpositions, nConv
 
         
 if __name__ == '__main__':
-    convs, readcounter = iteratereads_pairedend(sys.argv[1], True, True, True, True, True, True, True, 1, 255, 30, None, None, 'high')
+    #convs, readcounter = iteratereads_pairedend(sys.argv[1], True, True, True, True, True, True, True, 1, 255, 30, None, None, 'high')
+    convs, readcounter = iteratereads_singleend(sys.argv[1], True, True, True, True, 1, 60, 30, None, None, 'high')
     summarize_convs(convs, sys.argv[2])
 
     
