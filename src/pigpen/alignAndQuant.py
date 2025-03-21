@@ -23,6 +23,16 @@ import pysam
 
 #Requires STAR, salmon(>= 1.9.0), and postmaster be in user's PATH.
 
+parser = argparse.ArgumentParser(description = 'Align and quantify reads using STAR, salmon, and postmaster in preparation for analysis with PIGPEN.')
+parser.add_argument('--forwardreads', type = str, help = 'Forward reads. Gzipped fastq.')
+parser.add_argument('--reversereads', type = str, help = 'Reverse reads. Gzipped fastq. Do not supply if using single end reads.')
+parser.add_argument('--nthreads', type = str, help = 'Number of threads to use for alignment and quantification.')
+parser.add_argument('--STARindex', type = str, help = 'STAR index directory.')
+parser.add_argument('--salmonindex', type = str, help = 'Salmon index directory.')
+parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.')
+parser.add_argument('--maxmap', type = int, help = 'Maximum number of allowable alignments for a read.')
+args = parser.parse_args()
+
 def runSTAR(reads1, reads2, nthreads, STARindex, samplename):
     if not os.path.exists('STAR'):
         os.mkdir('STAR')
@@ -198,17 +208,7 @@ def addMD(samplename, reffasta, nthreads):
         subprocess.run(command, stdout = outfile)
     print('Finished adding MD tags to {0}.postmaster.md.bam!'.format(samplename))
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description = 'Align and quantify reads using STAR, salmon, and postmaster in preparation for analysis with PIGPEN.')
-    parser.add_argument('--forwardreads', type = str, help = 'Forward reads. Gzipped fastq.')
-    parser.add_argument('--reversereads', type = str, help = 'Reverse reads. Gzipped fastq. Do not supply if using single end reads.')
-    parser.add_argument('--nthreads', type = str, help = 'Number of threads to use for alignment and quantification.')
-    parser.add_argument('--STARindex', type = str, help = 'STAR index directory.')
-    parser.add_argument('--salmonindex', type = str, help = 'Salmon index directory.')
-    parser.add_argument('--samplename', type = str, help = 'Sample name. Will be appended to output files.')
-    parser.add_argument('--maxmap', type = int, help = 'Maximum number of allowable alignments for a read.')
-    args = parser.parse_args()
-
+def main():
     r1 = os.path.abspath(args.forwardreads)
     if args.reversereads:
         r2 = os.path.abspath(args.reversereads)
@@ -246,5 +246,8 @@ if __name__ == '__main__':
         os.remove(alignedr2)
     os.chdir(sampledir)
     runPostmaster(samplename, nthreads)
+
+if __name__ == '__main__':
+    main()
 
     
