@@ -58,11 +58,37 @@ BACON has the following prerequisites:
 
 ## Installation
 
-Installation can be done by cloning this repository. Alternatively PIGPEN can be installed using [bioconda](https://bioconda.github.io/) using `conda install -c bioconda pigpen`. Following installation using `conda`, PIPGEN is accessible by calling `pigpen`, e.g. `pigpen -h`. In either case, `postmaster` must be installed separately afterward. This can be done using `cargo install --git https://github.com/COMBINE-lab/postmaster`. If PIPGEN was installed via `conda`, make sure to install postmaster in the same environment.
+### Option 1: conda
+
+PIGPEN can be installed using [bioconda](https://bioconda.github.io/) using `conda install -c bioconda pigpen`. Following installation using `conda`, PIPGEN is accessible by calling `pigpen`, e.g. `pigpen -h`. Currently, `postmaster` must be installed separately afterward. This can be done using `cargo install --git https://github.com/COMBINE-lab/postmaster`. If PIPGEN was installed via `conda`, make sure to install postmaster in the same environment. #TODO: make bacon and alignAndQuant easily accessible after installation.
+
+### Option 2: manual installation
+
+Alternatively, you can download PIGPEN directly from this repository. PIPGEN is python-based, but requires a number of extra modules as well as some R and Rust libraries. These are most easilty installed with [conda](https://docs.conda.io/projects/conda/en/stable/index.html). The necessary software is listed in `pigpen_env.yaml`. This configuration file can be provided to conda and has all the information needed to setup a PIGPEN-ready environment.
+
+`conda env create -f pigpen_env.yaml`
+
+This will create an environment called `pigpen_env` that contains all the necessary modules. To activate the environment, type
+
+`source activate pigpen_env`
+
+Uncompress the repository and move into the compressed directory. Install PIGPEN using
+
+`python setup.py install`
+
+Then to make sure you are ready to go, ask for the help options in the PIGPEN, BACON, and alignAndQuant scripts using
+
+`pigpen -h`
+
+`bacon -h`
+
+`alignAndQuant -h`
+
+If there are errors, one or more of the modules likely did not install properly. In that case, using an alternative package manager like pip may help. If you see no errors, you are good to go.
 
 ## Preparing alignment files
 
-`pigpen.py` expects a particular directory structure for organization of `STAR`, `salmon`, and `postmaster` outputs. This is represented below.
+`pigpen` expects a particular directory structure for organization of `STAR`, `salmon`, and `postmaster` outputs. This is represented below.
 
 ```
 workingdir  
@@ -103,11 +129,11 @@ workingdir
 ...
 ```
 
-This structure can be automatically acheived by running `alignAndQuant.py` in `workingdir` once for each sample. Following this, the samples are ready to be analyzed with `pigpen.py`. 
+This structure can be automatically acheived by running `alignAndQuant` in `workingdir` once for each sample. Following this, the samples are ready to be analyzed with `pigpen`. 
 
 For example:
 
-`python alignAndQuant.py --forwardreads reads.r1.fq.gz --reversereads reads.r2.fq.gz --nthreads 32 --STARindex <STARindex> --salmonindex <salmonindex> --samplename sample1`
+`alignAndQuant --forwardreads reads.r1.fq.gz --reversereads reads.r2.fq.gz --nthreads 32 --STARindex <STARindex> --salmonindex <salmonindex> --samplename sample1`
 
 `STARindex` and `salmonindex` should be created according to the instructions for creating them found [here](https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf) and [here](https://salmon.readthedocs.io/en/latest/).
 
@@ -138,7 +164,7 @@ Second, `nConv` sets the minimum number of G -> C / G -> T conversions in a read
 
 ## Assigning reads to genes
 
-After PIGPEN calculates the number of converted and noncoverted nucleotides in each read pair, it intersects that data with the probabilistic transcript assignment for each read performed by `salmon` and `postmaster`. Conversions within read pair X are assigned proportionally to transcript Y according to the `salmon`/`postmaster`-calculated probability that read pair X originated from transcript Y. This transcript-level data is then collapsed to gene-level data according to the transcript/gene relationships found in `--gff`. Transcript IDs in `--gff` should match those in the fasta file used to make `--salmonindex`. The use of [GENCODE](www.gencodegenes.org) annotations is recommended if possible.
+After PIGPEN calculates the number of converted and noncoverted nucleotides in each read pair, it intersects that data with the probabilistic transcript assignment for each read performed by `salmon` and `postmaster`. Conversions within read pair X are assigned proportionally to transcript Y according to the `salmon`/`postmaster`-calculated probability that read pair X originated from transcript Y. This transcript-level data is then collapsed to gene-level data according to the transcript/gene relationships found in `--gff`. Transcript IDs in `--gff` should match those in the fasta file used to make `--salmonindex`. The use of [GENCODE](www.gencodegenes.org) annotations is recommended if possible. Alternatively, Ensembl annotations can be used. The source of the annotations should be supplied using the `--gfftype` flag.
 
 ## Calculating the number of conversions per gene
 
