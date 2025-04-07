@@ -198,7 +198,7 @@ def main():
                                                                 args.use_read1, args.use_read2, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
                 elif args.datatype == 'single':
                     convs, readcounter = iteratereads_singleend(
-                        samplebam, args.use_g_t, args.use_g_c, args.nConv, args.minMappingQual, snps, maskpositions, 'high')
+                        samplebam, args.use_g_t, args.use_g_c, args.use_g_x, args.use_ng_xg, args.nConv, args.minMappingQual, args.minPhred, snps, maskpositions, 'high')
 
             elif args.nproc > 1:
                 convs = getmismatches(args.datatype, samplebam, args.onlyConsiderOverlap, snps, maskpositions,
