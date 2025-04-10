@@ -89,7 +89,10 @@ def collapsetogene(txconvs, gff):
     print('Done indexing!')
 
     db = gffutils.FeatureDB(db_fn)
-    genes = db.features_of_type('gene')
+    #Very annoyingly, in some annotations, the third field for gene entries is not necessarily 'gene'
+    #in all ensembl annotations. For example, at least in an ensembl E. coli annotation, it can be 'ncRNA_gene'
+    #as well. Probably other things too.
+    genes = db.features_of_type(('gene', 'ncRNA_gene'))
 
     print('Connecting transcripts and genes...')
     for gene in genes:
