@@ -9,4 +9,4 @@ url = 'https://github.com/TaliaferroLab/OINC-seq',
 version = '0.0.7',
 packages = find_packages(where = './src', exclude = ['workflow', 'testdata']),
 package_dir = {'':'src'},
-entry_points = {'console_scripts': ['pigpen = pigpen:runpigpen.main', 'bacon = pigpen:bacon_glm.main', 'alignAndQuant = pigpen:alignAndQuant.main']})
+entry_points = {'console_scripts': ['pigpen = pigpen.runpigpen:main', 'bacon = pigpen.bacon_glm:main', 'alignAndQuant = pigpen.alignAndQuant:main']})
